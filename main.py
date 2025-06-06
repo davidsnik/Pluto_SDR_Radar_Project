@@ -1,11 +1,12 @@
 from PlutoSDR import PlutoSDR
+import matplotlib.pyplot as plt
 
 Pluto_IP = '192.168.2.1'
 sample_rate = 60.5e6 # in hz
 centerFrequency = 2.5e9 # in hz
 tx_gain = -20 # in db
 rx_gain = 40 # in db
-rx_frame_duration = 100 # in ms
+rx_frame_duration = 1000 # in ms
 rx_samples_per_frame = int((rx_frame_duration*(10**-3))/sample_rate)
 
 chirp_type = "SawtoothWave" # Options: "SawtoothWave", "TriangularWave"
@@ -16,7 +17,10 @@ chirp_duration = 50 # ms
 sdr_obj = PlutoSDR(Pluto_IP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
 sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
 sdr_obj.start_transmission()
+received_data = self.receive_data()
 
+plt.plot(np.arange(0, T + sample_period, sample_period), received_data)
+plt.show()
 
 # %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%
 
