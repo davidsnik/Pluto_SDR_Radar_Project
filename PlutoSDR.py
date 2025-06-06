@@ -3,7 +3,6 @@ import numpy as np
 
 class PlutoSDR:
     def __init__(PlutoIP, tx_buffer_size, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
-        # %% Setup SDR
         PlutoIP = 'ip:'+PlutoIP
         my_sdr = adi.Pluto(uri=PlutoIP)
         my_sdr.sample_rate = int(sample_rate)
@@ -23,9 +22,7 @@ class PlutoSDR:
         
         frame_length_samples = rx_samples_per_frame
         
-        if (
-            frame_length_samples != tx_buffer_size
-        ):
+        if frame_length_samples != tx_buffer_size:
             frame_length_samples = int(tx_buffer_size)
         
         N_rx = int(1 * frame_length_samples)
@@ -39,41 +36,48 @@ class PlutoSDR:
         self.rx_gain = rx_gain
         self.tx_gain = tx_gain
         self.rx_samples_per_frame = rx_samples_per_frame
-        self.current_waveform_type = None
+
+        self.chirp_type = None
+        self.chirp_amplitude = None
+        self.chirp_bandwidth = None
+        self.chirp_duration = None
         self.iq = None
+
         self.pluto_interface = my_sdr
     
-    def set_waveform(self, chirp_type, bandwidth, chirp_duration, carrier_frequency):
+    def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
 
         time = np.arange(0, T + sample_period, sample_period)
 
         match chirp_type:
             case "SawtoothWave":
-                chirp_slope = bandwidth/chirp_duration
-                self.iq = (2**12) * np.exp(1j*np.pi*chirp_slope*(time**2))
+                chirp_slope = chirp_bandwidth/(chirp_duration*(10**-3))
+                self.iq = chirp_amplitude * np.exp(1j*np.pi*chirp_slope*(time**2))
             case "TriangularWave":
                 pass # TODO
 
-        self.current_waveform_type = waveform_type
-        self.iq = iq
+        self.chirp_type = chirp_type
+        self.chirp_amplitude = chirp_amplitude
+        self.chirp_bandwidth = chirp_bandwidth
+        self.chirp_duration = chirp_duration
 
     def start_transmission(self):
-        if self.current_waveform_type != None:
+        if self.iq != None:
+            self.pluto_interface._rx_init_channels()
             self.pluto_interface.tx_cyclic_buffer = True  # must be true to use the continuos transmission
             self.pluto_interface.tx(self.iq)
         else:
             print("Start transmission not working since waveform config unset")
 
-    def receive_data(self, frame_length_samples):
-        if self.current_waveform_type != None:
-            self.pluto_interface._rx_init_channels()
+    def receive_data(self):
+        if self.iq != None:
             received_array = self.pluto_interface.rx()     
             return received_array.tolist()
         else:
             print("Receive data not working since waveform config unset")
     def stop_transmission(self):
-        if self.current_waveform_type != None:
+        if self.iq != None:
             self.pluto_interface.tx_destroy_buffer()
         else:
             print("Stop transmission not working since waveform config unset")
