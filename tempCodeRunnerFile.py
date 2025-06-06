@@ -1,0 +1,1 @@
+img_item.setLevels([0, 1])
