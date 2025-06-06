@@ -1,25 +1,34 @@
 from PlutoSDR import PlutoSDR
 import matplotlib.pyplot as plt
-
-Pluto_IP = '192.168.2.1'
+import numpy as np
+from scipy.signal import stft
+PlutoIP = '192.168.2.1'
 sample_rate = 60.5e6 # in hz
 centerFrequency = 2.5e9 # in hz
 tx_gain = -20 # in db
 rx_gain = 40 # in db
-rx_frame_duration = 1000 # in ms
+rx_frame_duration = 1 # in ms
 rx_samples_per_frame = int((rx_frame_duration*(10**-3))/sample_rate)
 
 chirp_type = "SawtoothWave" # Options: "SawtoothWave", "TriangularWave"
 chirp_amplitude = (2**12)
 chirp_bandwidth = 30e6 # hz
-chirp_duration = 1 # ms
+chirp_duration = rx_frame_duration # ms
 
-sdr_obj = PlutoSDR(Pluto_IP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
+tx_buffer_size = sample_rate*(chirp_duration*(10**-3))
+
+sdr_obj = PlutoSDR(PlutoIP, tx_buffer_size, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
 sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
 sdr_obj.start_transmission()
-received_data = self.receive_data()
+received_data = sdr_obj.receive_data()
 
-plt.plot(np.arange(0, T + sample_period, sample_period), received_data)
+f, t, Z = stft(received_data,fs = sample_rate, nperseg = 256, return_onesided = True)
+pos_freq = f>=0
+f_pos = f[pos_freq]
+Z_pos = Z[pos_freq]
+plt.figure(figsize = (10,4))
+plt.pcolormesh(t,f_pos,np.abs(Z_pos)/np.max(np.abs(Z_pos)), shading = 'gouraud')
+plt.tight_layout()
 plt.show()
 
 # %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%
