@@ -1,65 +1,37 @@
-import adi
-import numpy as np
-import typing as t
-
-class PlutoSDR:
-    def __init__(self, PlutoIP, sample_rate, center_freq, rx_gain, tx_gain, rx_SamplesPerFrame):
-        PlutoIP = 'ip:'+PlutoIP
-        my_sdr = adi.Pluto(uri=PlutoIP)
-        my_sdr.sample_rate = int(sample_rate)
-        my_sdr.tx_rf_bandwidth = int(sample_rate)
-        my_sdr.rx_rf_bandwidth = int(sample_rate)
-        my_sdr.rx_lo = int(center_freq)
-        my_sdr.tx_lo = int(center_freq)
-        my_sdr.rx_enabled_channels = [0]
-        sample_rate = int(sample_rate)
-        my_sdr.gain_control_mode_chan0 = "manual"
-        my_sdr.rx_hardwaregain_chan0 = int(rx_gain)
-        my_sdr._rxadc.set_kernel_buffers_count(1)
-        my_sdr.tx_enabled_channels = [0]
-        my_sdr.tx_hardwaregain_chan0 = int(tx_gain)
-        frame_length_samples = rx_SamplesPerFrame
-    
-        N_rx = int(1 * frame_length_samples)
-        my_sdr.rx_buffer_size = N_rx
-
-        self.PlutoIP = PlutoIP
-        self.sample_rate = sample_rate
-        self.center_freq = center_freq
-        self.rx_gain = rx_gain
-        self.tx_gain = tx_gain
-        self.rx_SamplesPerFrame = rx_SamplesPerFrame
-        self.pluto_interface = my_sdr
-    
-    def set_waveform(self, chirp_type, bandwidth, chirp_duration, carrier_frequency):
-        sample_period = 1/self.sample_rate
-
-        time = np.arange(0, T + sample_period, sample_period)
-
-        match chirp_type:
-            case "SawtoothWave":
-                chirp_slope = bandwidth/chirp_duration
-                self.iq = (2**12) * np.exp(1j*np.pi*chirp_slope*(time**2))
-            case "TriangularWave":
-                pass # TODO
-
-        self.current_waveform_type = waveform_type
-        self.iq = iq
-
-    def start_transmission(self):
-        self.pluto_interface.tx_cyclic_buffer = True  # must be true to use the continuos transmission
-        self.pluto_interface.tx(self.iq)
-
-    def receive_data(self, frame_length_samples):
-        self.pluto_interface._rx_init_channels()
-        received_array = self.pluto_interface.rx()     
-        return received_array.tolist()
-
-    def stop_transmission(self):
-        self.pluto_interface.tx_destroy_buffer()
+from PlutoSDR import PlutoSDR
 
 
 
+Pluto_IP = '192.168.2.1'
+PlutoSamprate = 60.5e6 # in hz
+centerFrequency = 2.5e9 # in hz
+tx_gain = -20 # in db
+rx_gain = 40 # in db
+rx_frame_duration = 100 # in ms
+rx_samples_per_frame = int((rx_frame_duration*(10**-3))/PlutoSamprate)
+
+sdr_obj = PlutoSDR(Pluto_IP, PlutoSamprate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
+sdr_obj.start_transmission()
+
+
+# %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%
+
+# % If you want repeatable alignment between transmit and receive then the 
+# % rx_lo, tx_lo and sample_rate can only be set once after power up. If you
+# % want to change the following parameters' values after the first run you 
+# % must reboot the Pluto (disconnect and reconnect it)
+
+# Pluto_IP = '192.168.2.1';
+# PlutoSamprate = 60.5e6;  % Sampling frequency (Hz): Pluto can sample up to
+# %                       61 MHz but due to the USB 2.0 interface you have to
+# %                       choose values lower or equal to 5MHz if you want to
+# %                       receive 100% of samples over time.
+# centerFrequency = 2.5e9;  % Pluto operating frequency (Hz) must be between
+# %                         70MHz and 6GHz
+# tx_gain = -20; %-45  % Pluto TX channel Gain must be between 0 and -88
+# rx_gain = 40;% 0   % Pluto RX channel Gain must be between -3 and 70
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # %%%%%%%%%%%%%%%%%%%%%%%%% TX Waveform generation %%%%%%%%%%%%%%%%%%%%%%%%%%
 # B = 30e6;       % Chirp bandwidth (Hz)
 # T = 100e-6;       % Chirp duration (s)
