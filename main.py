@@ -1,6 +1,17 @@
+from PlutoSDR import PlutoSDR
+
+
+
 Pluto_IP = '192.168.2.1'
-PlutoSamprate = 60.5e6
-sdr_obj = PlutoSDR()
+PlutoSamprate = 60.5e6 # in hz
+centerFrequency = 2.5e9 # in hz
+tx_gain = -20 # in db
+rx_gain = 40 # in db
+rx_frame_duration = 100 # in ms
+rx_samples_per_frame = int((rx_frame_duration*(10**-3))/PlutoSamprate)
+
+sdr_obj = PlutoSDR(Pluto_IP, PlutoSamprate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
+sdr_obj.start_transmission()
 
 
 # %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%

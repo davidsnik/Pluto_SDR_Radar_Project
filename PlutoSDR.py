@@ -2,7 +2,7 @@ import adi
 import numpy as np
 
 class PlutoSDR:
-    def __init__(PlutoIP, tx_buffer_size,sample_rate, tx_center_freq, rx_center_freq, rx_gain,tx_gain, rx_SamplePerFrame):
+    def __init__(PlutoIP, tx_buffer_size, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
         # %% Setup SDR
         PlutoIP = 'ip:'+PlutoIP
         my_sdr = adi.Pluto(uri=PlutoIP)
@@ -21,7 +21,7 @@ class PlutoSDR:
         my_sdr.tx_enabled_channels = [0]
         my_sdr.tx_hardwaregain_chan0 = int(tx_gain)
         
-        frame_length_samples = rx_SamplePerFrame
+        frame_length_samples = rx_samples_per_frame
         
         if (
             frame_length_samples != tx_buffer_size
@@ -31,6 +31,14 @@ class PlutoSDR:
         N_rx = int(1 * frame_length_samples)
         my_sdr.rx_buffer_size = N_rx
 
+        self.Pluto_IP = PlutoIP
+        self.tx_buffer_size = tx_buffer_size
+        self.sample_rate = sample_rate
+        self.tx_center_freq = tx_center_freq
+        self.rx_center_freq = rx_center_freq
+        self.rx_gain = rx_gain
+        self.tx_gain = tx_gain
+        self.rx_samples_per_frame = rx_samples_per_frame
         self.current_waveform_type = None
         self.iq = None
         self.pluto_interface = my_sdr
