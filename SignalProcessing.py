@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.fft as fft
+from main import PlutoSDR
 
 def ProcessedMatrix(data_vector: np.ndarray):
     print(data_vector)
