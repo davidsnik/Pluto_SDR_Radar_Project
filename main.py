@@ -12,7 +12,7 @@ rx_samples_per_frame = int((rx_frame_duration*(10**-3))/sample_rate)
 chirp_type = "SawtoothWave" # Options: "SawtoothWave", "TriangularWave"
 chirp_amplitude = (2**12)
 chirp_bandwidth = 30e6 # hz
-chirp_duration = 50 # ms
+chirp_duration = 1 # ms
 
 sdr_obj = PlutoSDR(Pluto_IP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
 sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
