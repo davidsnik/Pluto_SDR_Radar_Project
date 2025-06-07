@@ -11,10 +11,10 @@ chirp_duration = 0.000128  # 128 samples if sample_rate is 1 MHz
 c = 3e8
 num_range_bins = int(chirp_duration * sample_rate)
 max_chirps = 255
-chirps_per_refresh = 1
+chirps_per_refresh = 3
 chirp_bandwidth = 30e6
 centerFrequency = 2.5e9
-update_interval = int(chirps_per_refresh*chirp_duration*1e3)
+update_interval = 50 #int(chirps_per_refresh*chirp_duration*1e3)
 sweep_count = 0
 def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))

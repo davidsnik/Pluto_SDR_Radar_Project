@@ -15,7 +15,7 @@ chirps_per_refresh = 1
 chirp_bandwidth = 30e6
 centerFrequency = 2.5e9
 # update_interval = int(chirps_per_refresh*chirp_duration*1e3)
-update_interval = 10
+update_interval = 100
 sweep_count = 0
 def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
@@ -26,7 +26,7 @@ class RadarChirpSimulator:
                  B=chirp_bandwidth, T=chirp_duration, f0=centerFrequency, fs=sample_rate,
                  R_target=np.array([10, 100]), 
                  v=np.array([40, -10]), 
-                 SNR_dB=20, 
+                 SNR_dB=-16, 
                  N_slow=max_chirps):
         self.B = B
         self.T = T
@@ -146,7 +146,6 @@ def ProcessedMatrix():
         # Normalize
         norm_fft = np.abs(FFT_pos)
         norm_fft /= np.max(norm_fft)
-
         # Display range-time spectrogram
         img_item.setImage(norm_fft, autoLevels=False)
         img_item.setRect(QtCore.QRectF(range_axis[0], start_time,
