@@ -50,7 +50,9 @@ class PlutoSDR:
     def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
 
-        time = np.arange(0, (chirp_duration*(10**-3)) + sample_period, sample_period)
+
+        time = np.arange(0, self.T + sample_period, sample_period)
+
 
         match chirp_type:
             case "SawtoothWave":
