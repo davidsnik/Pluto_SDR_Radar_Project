@@ -77,13 +77,18 @@ def process_and_display():
     data_matrix = np.zeros((cols, rows), dtype=np.complex64)  # shape (time, range)
 
     app = QtWidgets.QApplication(sys.argv)
-    win = pg.GraphicsLayoutWidget(show=True, title="Radar Range-Time Response")
+    win = pg.GraphicsLayoutWidget(show=True, title="Radar Range-Time and Doppler Maps")
     win.resize(800, 600)
-    plot = win.addPlot()
-    plot.setLabel('left', 'Time Sweep')
-    plot.setLabel('bottom', 'Range Bin')
+    # First plot: Range-Time
+    plot = win.addPlot(title="Range-Time Response")
     img_item = pg.ImageItem()
     plot.addItem(img_item)
+
+    # Second plot: Range-Velocity (Doppler)
+    plot2 = win.addPlot(title="Range-Velocity Map")
+    img_item2 = pg.ImageItem()
+    plot2.addItem(img_item2)
+
 
     lut = pg.colormap.get('viridis').getLookupTable(0.0, 1.0, 256)
     img_item.setLookupTable(lut)
@@ -92,7 +97,8 @@ def process_and_display():
     sim = RadarChirpSimulator()
 
     def update():
-        global sweep_count, data_matrix
+        global sweep_count 
+        nonlocal data_matrix
         try:
             new_sweep = sim.get_next_chirp()
         except StopIteration:
@@ -114,10 +120,8 @@ def process_and_display():
         if sweep_count >= chirps_per_refresh:
             norm_fft = np.abs(FFT_data)
             norm_fft /= np.max(norm_fft)
-
+            print("norm_fft.shape =", norm_fft.shape)
             # x=range bins, y=time sweeps
-            img_item.setImage(norm_fft.T, autoLevels=False, levels=(0, 1))
-
             # frequency axis for range (beat freq)
             f_axis_range = np.fft.fftfreq(N_FFT, d=1/sample_rate)
             f_axis_range = fftshift(f_axis_range)
@@ -127,16 +131,39 @@ def process_and_display():
             elapsed_time = sweep_count * chirp_duration
             window_width = max_chirps * chirp_duration
             start_time = max(0, elapsed_time - window_width)
-
+            
+            img_item.setImage(norm_fft, autoLevels=False, levels=(0, 1))
             img_item.setRect(QtCore.QRectF(0, start_time, range_axis[-1], window_width))
             plot.setLabel('bottom', 'Range [m]')
             plot.setLabel('left', 'Time [s]')
 
+        N_Doppler = 32
+        N_FFT_doppler = next_pow2(N_Doppler)
+        if sweep_count >= N_Doppler:
+            slow_time_profiles = FFT_data[sweep_count-N_Doppler : sweep_count, :]
+            doppler_fft = fftshift(fft(slow_time_profiles, axis=0), axes=0)
+            doppler_map = np.abs(doppler_fft)/np.max(np.abs(doppler_fft))
+            f_axis_dop = np.fft.fftfreq(N_FFT_doppler, d=chirp_duration)
+            f_axis_dop=np.fft.fftshift(f_axis_dop)
+            vel_axis = (c * f_axis_dop) / (2 * centerFrequency)
+            #print("doppler_map.shape =", doppler_map.shape)
+            # find two strongest Doppler bins
+            dp = np.abs(doppler_fft).max(1)
+            idx = np.argpartition(dp, -2)[-2:]
+            print("Expected velocities:", vel_axis[idx])
+
+            img_item2.setImage(doppler_map, autoLevels=False, levels=(0, 1))            
+            img_item2.setRect(QtCore.QRectF(0, vel_axis[0], range_axis[-1], vel_axis[-1] - vel_axis[0]))
+
+            plot2.setLabel('bottom', 'Range [m]')
+            plot2.setLabel('left', 'Velocity [m/s]')
+
+            
     timer = QtCore.QTimer()
     timer.timeout.connect(update)
     timer.start(update_interval)
 
-    QtWidgets.QApplication.instance().exec_()
+    QtWidgets.QApplication.instance().exec()
 
 
 if __name__ == '__main__':
