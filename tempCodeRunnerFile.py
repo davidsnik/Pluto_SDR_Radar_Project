@@ -1,1 +1,1 @@
-img_item.setLevels([0, 1])
+sample_rate = 1e6 

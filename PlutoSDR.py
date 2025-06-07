@@ -2,7 +2,7 @@ import adi
 import numpy as np
 
 class PlutoSDR:
-    def __init__(PlutoIP, tx_buffer_size, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
+    def __init__(self, PlutoIP, tx_buffer_size, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
         PlutoIP = 'ip:'+PlutoIP
         my_sdr = adi.Pluto(uri=PlutoIP)
         my_sdr.sample_rate = int(sample_rate)
@@ -48,7 +48,7 @@ class PlutoSDR:
     def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
 
-        time = np.arange(0, T + sample_period, sample_period)
+        time = np.arange(0, self.T + sample_period, sample_period)
 
         match chirp_type:
             case "SawtoothWave":

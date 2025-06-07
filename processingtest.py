@@ -1,31 +1,13 @@
 import numpy as np
-import pyqtgraph as pg
-from scipy.signal import windows
-from scipy.fft import fft, fftshift, fftfreq
 from numpy.random import normal
-from pyqtgraph.Qt import QtCore, QtWidgets
-import sys
-
-sample_rate = 1e6     # example value
-chirp_duration = 0.000128  # 128 samples if sample_rate is 1 MHz
-c = 3e8
-num_range_bins = int(chirp_duration * sample_rate)
-max_chirps = 255
-chirps_per_refresh = 1
-chirp_bandwidth = 30e6
-centerFrequency = 2.5e9
-# update_interval = int(chirps_per_refresh*chirp_duration*1e3)
-update_interval = 100
-sweep_count = 0
-def next_pow2(n):
-    return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
+from SignalProcessing import chirp_bandwidth, chirp_duration, sample_rate, centerFrequency, max_chirps
 
 
 class RadarChirpSimulator:
     def __init__(self, 
                  B=chirp_bandwidth, T=chirp_duration, f0=centerFrequency, fs=sample_rate,
                  R_target=np.array([10, 100]), 
-                 v=np.array([40, -10]), 
+                 v=np.array([400, -10]), 
                  SNR_dB=-16, 
                  N_slow=max_chirps):
         self.B = B
@@ -74,112 +56,3 @@ class RadarChirpSimulator:
 
         self.n_sweep += 1
         return s_beat.astype(np.complex64)
-
-def ProcessedMatrix():
-    global data_matrix, sweep_count
-    rows = int(chirp_duration*sample_rate)  # samples per chirp (fast time)
-    cols = max_chirps                     # number of chirps (slow time)
-    data_matrix = np.zeros((rows, cols), dtype= np.complex64)
-    
-    N_FFT = next_pow2(num_range_bins)
-    f_axis = fftfreq(N_FFT, d=1/sample_rate)
-    f_axis = fftshift(f_axis)
-    N_FFT2 = next_pow2(max_chirps+1)
-    half_idx2 = N_FFT2//2
-    f_axis_dop = fftfreq(N_FFT2, d = 1/chirp_duration)
-    f_axis_dop_pos = f_axis_dop[half_idx2:]
-    # Keep only positive frequencies
-    half_idx = N_FFT // 2
-    f_axis_pos = f_axis[half_idx:]  # Only positive freqs
-
-    k = chirp_bandwidth / chirp_duration
-    range_axis = (c * f_axis_pos) / (2 * k)
-    vel_axis = (c * f_axis_dop) / (2 * centerFrequency)
-    
-    app = QtWidgets.QApplication(sys.argv)
-    win1 = pg.GraphicsLayoutWidget(title="Range-Time Plot")
-    plot1 = win1.addPlot()
-    plot1.setLabel('left', 'Time (s)')
-    plot1.setLabel('bottom', 'Range (m)')
-    win1.show()
-
-    # Second window
-    win2 = pg.GraphicsLayoutWidget(title="Doppler-Range Plot")
-    plot2 = win2.addPlot()
-    plot2.setLabel('left', 'Velocity (m/s)')
-    plot2.setLabel('bottom', 'Range (m)')
-    win2.show()
-    img_item = pg.ImageItem()
-    plot1.addItem(img_item)
-    img_doppler = pg.ImageItem()
-    plot2.addItem(img_doppler)
-
-    lut = pg.colormap.get('viridis').getLookupTable(0.0, 1.0, 256)
-    img_item.setLookupTable(lut)
-    img_item.setLevels([0, 1])  # Fixed amplitude scaling
-    img_doppler.setLookupTable(lut)
-    img_doppler.setLevels([0,1])
-    sim = RadarChirpSimulator()
-    def update():
-        global sweep_count, data_matrix
-        new_sweep = sim.get_next_chirp()
-
-        if sweep_count < max_chirps:
-            data_matrix[:, sweep_count] = new_sweep
-        else:
-            data_matrix = np.roll(data_matrix, -1, axis=1)
-            data_matrix[:, -1] = new_sweep
-        sweep_count += 1
-        N_FFT_3 = next_pow2(rows)
-        # Time axis (slow time)
-        elapsed_time = sweep_count * chirp_duration
-        window_width = max_chirps * chirp_duration
-        start_time = max(0, elapsed_time - window_width)
-        plot1.setYRange(start_time, start_time + window_width, padding=0)
-        
-        # FFT along fast time (range)
-        FFT_data = fftshift(fft(data_matrix, n=N_FFT, axis=0), axes=0)
-
-        # Only keep positive range bins (shape = (N_FFT//2, N_sweeps))
-        FFT_pos = FFT_data[half_idx:, :]  # half_idx = N_FFT // 2
-
-        # Normalize
-        norm_fft = np.abs(FFT_pos)
-        norm_fft /= np.max(norm_fft)
-        # Display range-time spectrogram
-        img_item.setImage(norm_fft, autoLevels=False)
-        img_item.setRect(QtCore.QRectF(range_axis[0], start_time,
-                                    range_axis[-1] - range_axis[0], window_width))
-
-        # Determines on how many chirps the fft will be applied.
-        N_Doppler = 32
-        N_FFT_doppler = next_pow2(N_Doppler)
-        if sweep_count >= N_Doppler:
-            #This ifelse maks sure slow_time_profiles always chooses something between 0 and 255, since FFT_pos has shape (..,255)
-            if sweep_count<=cols:
-                slow_time_profiles = FFT_pos[:, sweep_count-N_Doppler : sweep_count] #Choose last N_doppler chirps to apply FFT on
-            else:
-                slow_time_profiles = FFT_pos[:, 255-N_Doppler : 255]
-            
-            doppler_fft = fftshift(fft(slow_time_profiles, axis=1), axes=1)
-            doppler_map = np.abs(doppler_fft)/np.max(np.abs(doppler_fft))
-            f_axis_dop = np.fft.fftfreq(N_FFT_doppler, d=chirp_duration)
-            f_axis_dop=np.fft.fftshift(f_axis_dop)
-            vel_axis = (c * f_axis_dop) / (2 * centerFrequency)
-
-            img_doppler.setImage(doppler_map, autoLevels=False)
-            img_doppler.setRect(QtCore.QRectF(range_axis[0], vel_axis[0],
-                                        range_axis[-1] - range_axis[0],
-                                        vel_axis[-1] - vel_axis[0]))
-            plot2.setLabel('bottom', 'Range [m]')
-            plot2.setLabel('left', 'Velocity [m/s]')
-
-    timer = QtCore.QTimer()
-    timer.timeout.connect(update)
-    timer.start(update_interval)
-
-    QtWidgets.QApplication.instance().exec()
-
-
-if __name__ == '__main__':
-    ProcessedMatrix()
