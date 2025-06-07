@@ -111,7 +111,7 @@ def ProcessedMatrix():
     img_item = pg.ImageItem()
     plot1.addItem(img_item)
     img_doppler = pg.ImageItem()
-    plot2.addItem(img_doppler)
+    # plot2.addItem(img_doppler)
 
     lut = pg.colormap.get('viridis').getLookupTable(0.0, 1.0, 256)
     img_item.setLookupTable(lut)
@@ -126,8 +126,9 @@ def ProcessedMatrix():
         if sweep_count < max_chirps:
             data_matrix[:, sweep_count] = new_sweep
         else:
-            data_matrix = np.roll(data_matrix, -1, axis=1)
+            data_matrix[:, :-1] = data_matrix[:, 1:]
             data_matrix[:, -1] = new_sweep
+
         sweep_count += 1
         
         # Time axis (slow time)
@@ -152,18 +153,21 @@ def ProcessedMatrix():
                                     range_axis[-1] - range_axis[0], window_width))
 
         # Doppler FFT (on slow-time axis)
-        FFT_2_data = fftshift(fft(FFT_pos, n=N_FFT2, axis=1), axes=1)  # shape = (N_FFT//2, N_FFT2)
+        # Doppler FFT (slow time -> velocity)
+        FFT_2_data = fftshift(fft(FFT_pos, n=N_FFT2, axis=1), axes=1)
         norm_fft_2 = np.abs(FFT_2_data)
         max_val = np.max(norm_fft_2)
         if max_val > 0:
             norm_fft_2 /= max_val
         else:
-            norm_fft_2[:] = 0  # or keep the previous frame if you prefer
-        # Plot Doppler-Range image
+            norm_fft_2[:] = 0
         img_doppler.setImage(norm_fft_2, autoLevels=False)
-        img_doppler.setRect(QtCore.QRectF(range_axis[0], vel_axis[0],
-                                        range_axis[-1] - range_axis[0],
-                                        vel_axis[-1] - vel_axis[0]))
+
+        img_doppler.setRect(QtCore.QRectF(
+            range_axis[0], vel_axis[0],
+            range_axis[-1] - range_axis[0], vel_axis[-1] - vel_axis[0]
+        ))
+
 
     timer = QtCore.QTimer()
     timer.timeout.connect(update)
