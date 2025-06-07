@@ -1,5 +1,6 @@
 import adi
 import numpy as np
+import scipy.fft as fft
 
 class PlutoSDR:
     def __init__(self, PlutoIP, tx_buffer_size, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
@@ -37,6 +38,7 @@ class PlutoSDR:
         self.tx_gain = tx_gain
         self.rx_samples_per_frame = rx_samples_per_frame
 
+        self.chirp_time_axis = None
         self.chirp_type = None
         self.chirp_amplitude = None
         self.chirp_bandwidth = None
@@ -48,12 +50,14 @@ class PlutoSDR:
     def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
 
+
         time = np.arange(0, self.T + sample_period, sample_period)
+
 
         match chirp_type:
             case "SawtoothWave":
                 chirp_slope = chirp_bandwidth/(chirp_duration*(10**-3))
-                self.iq = chirp_amplitude * np.exp(1j*np.pi*chirp_slope*(time**2))
+                self.iq = chirp_amplitude * np.exp(-1j*np.pi*chirp_slope*(time**2))
             case "TriangularWave":
                 pass # TODO
 
@@ -63,7 +67,7 @@ class PlutoSDR:
         self.chirp_duration = chirp_duration
 
     def start_transmission(self):
-        if self.iq != None:
+        if self.chirp_type != None:
             self.pluto_interface._rx_init_channels()
             self.pluto_interface.tx_cyclic_buffer = True  # must be true to use the continuos transmission
             self.pluto_interface.tx(self.iq)
@@ -71,13 +75,14 @@ class PlutoSDR:
             print("Start transmission not working since waveform config unset")
 
     def receive_data(self):
-        if self.iq != None:
-            received_array = self.pluto_interface.rx()     
-            return received_array.tolist()
+        if self.chirp_type != None:
+            received_array = self.pluto_interface.rx()  
+            s_beat = received_array * np.squeeze(np.conj(self.iq[np.newaxis, :]))[:-2]
+            return s_beat
         else:
             print("Receive data not working since waveform config unset")
     def stop_transmission(self):
-        if self.iq != None:
+        if self.chirp_type != None:
             self.pluto_interface.tx_destroy_buffer()
         else:
             print("Stop transmission not working since waveform config unset")
