@@ -77,8 +77,9 @@ class PlutoSDR:
 
     def receive_data(self):
         if self.chirp_type != None:
-            rx_iq = self.pluto_interface.rx()  
-            s_beat = rx_iq[:min(len(rx_iq), len(self.tx_iq))] * np.conj(self.tx_iq[:min(len(rx_iq), len(self.tx_iq))])
+            rx_iq = self.pluto_interface.rx()
+            N_min = min(len(rx_iq), len(self.tx_iq))
+            s_beat = rx_iq[:N_min] * np.conj(self.tx_iq[:N_min])
             return s_beat
         else:
             print("Receive data not working since waveform config unset")
