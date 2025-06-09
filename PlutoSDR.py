@@ -39,28 +39,29 @@ class PlutoSDR:
         self.chirp_amplitude = None
         self.chirp_bandwidth = None
         self.chirp_duration = None
-        self.iq = None
+        self.tx_iq = None
 
         self.pluto_interface = my_sdr
     
     def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
 
-
-        time = np.arange(0, self.T + sample_period, sample_period)
-
+        time = np.arange(0, chirp_duration + sample_period, sample_period)
 
         match chirp_type:
             case "SawtoothWave":
                 chirp_slope = chirp_bandwidth/(chirp_duration*(10**-3))
-                self.iq = chirp_amplitude * np.exp(-1j*np.pi*chirp_slope*(time**2))
+                self.tx_iq = chirp_amplitude * np.exp(-1j*np.pi*chirp_slope*(time**2))
             case "TriangularWave":
                 chirp_slope = chirp_bandwidth/((chirp_duration*(10**-3))/2)
-                self.iq = chirp_amplitude * np.concatonate(
+                self.tx_iq = chirp_amplitude * np.concatonate(
                     np.exp(-1j*np.pi*chirp_slope*((time[:len(time)//2])**2)),
                     np.exp(-1j*np.pi*(-chirp_slope)*((time[len(time)//2:])**2))
                     )
+            case _: 
+                return None
 
+        self.chirp_time_axis = time
         self.chirp_type = chirp_type
         self.chirp_amplitude = chirp_amplitude
         self.chirp_bandwidth = chirp_bandwidth
@@ -70,14 +71,14 @@ class PlutoSDR:
         if self.chirp_type != None:
             self.pluto_interface._rx_init_channels()
             self.pluto_interface.tx_cyclic_buffer = True  # must be true to use the continuos transmission
-            self.pluto_interface.tx(self.iq)
+            self.pluto_interface.tx(self.tx_iq)
         else:
             print("Start transmission not working since waveform config unset")
 
     def receive_data(self):
         if self.chirp_type != None:
-            received_array = self.pluto_interface.rx()  
-            s_beat = received_array * np.squeeze(np.conj(self.iq[np.newaxis, :]))[:-2]
+            rx_iq = self.pluto_interface.rx()  
+            s_beat = rx_iq[:min(len(rx_iq), len(self.tx_iq))] * np.conj(self.tx_iq[:min(len(rx_iq), len(self.tx_iq))])
             return s_beat
         else:
             print("Receive data not working since waveform config unset")

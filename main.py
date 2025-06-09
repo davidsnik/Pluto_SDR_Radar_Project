@@ -20,7 +20,7 @@ sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duratio
 sdr_obj.start_transmission()
 received_data = sdr_obj.receive_data()
 
-f, t, Z = stft(received_data,fs = sample_rate, nperseg = 256, return_onesided = True)
+f, t, Z = stft(received_data, fs = sample_rate, nperseg = 256, return_onesided = True)
 pos_freq = f>=0
 f_pos = f[pos_freq]
 Z_pos = Z[pos_freq]
