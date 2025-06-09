@@ -93,17 +93,18 @@ class PlutoSDR:
         else:
             print("Stop transmission not working since waveform config unset")
 
-    def get_beat_freq(self):
+    def get_beat_signal(self):
         if self.chirp_type != None:
             self.start_transmission()
             s_beat = self.receive_data()
             self.stop_transmission()
 
-            spectrum = fft.fft(s_beat)
-            magnitude = np.abs(spectrum)
-            peak_index = np.argmax(magnitude)
-            self.f_beat = np.abs(frequencies[peak_index])
+            # spectrum = fft.fft(s_beat)
+            # magnitude = np.abs(spectrum)
+            # peak_index = np.argmax(magnitude)
+            # self.f_beat = np.abs(frequencies[peak_index])
 
-            return self.f_beat
+            return s_beat
         else:
             print("Get beat freq not possible since waveform not set")
+
