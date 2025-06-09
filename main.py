@@ -15,9 +15,7 @@ chirp_amplitude = (2**12)
 chirp_bandwidth = 30e6 # hz
 chirp_duration = rx_frame_duration # ms
 
-tx_buffer_size = sample_rate*(chirp_duration*(10**-3))
-
-sdr_obj = PlutoSDR(PlutoIP, tx_buffer_size, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
+sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
 sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
 sdr_obj.start_transmission()
 received_data = sdr_obj.receive_data()

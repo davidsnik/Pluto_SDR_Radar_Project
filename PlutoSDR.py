@@ -3,7 +3,7 @@ import numpy as np
 import scipy.fft as fft
 
 class PlutoSDR:
-    def __init__(self, PlutoIP, tx_buffer_size, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
+    def __init__(self, PlutoIP, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
         PlutoIP = 'ip:'+PlutoIP
         my_sdr = adi.Pluto(uri=PlutoIP)
         my_sdr.sample_rate = int(sample_rate)
@@ -23,14 +23,10 @@ class PlutoSDR:
         
         frame_length_samples = rx_samples_per_frame
         
-        if frame_length_samples != tx_buffer_size:
-            frame_length_samples = int(tx_buffer_size)
-        
         N_rx = int(1 * frame_length_samples)
         my_sdr.rx_buffer_size = N_rx
 
         self.Pluto_IP = PlutoIP
-        self.tx_buffer_size = tx_buffer_size
         self.sample_rate = sample_rate
         self.tx_center_freq = tx_center_freq
         self.rx_center_freq = rx_center_freq
@@ -59,7 +55,11 @@ class PlutoSDR:
                 chirp_slope = chirp_bandwidth/(chirp_duration*(10**-3))
                 self.iq = chirp_amplitude * np.exp(-1j*np.pi*chirp_slope*(time**2))
             case "TriangularWave":
-                pass # TODO
+                chirp_slope = chirp_bandwidth/((chirp_duration*(10**-3))/2)
+                self.iq = chirp_amplitude * np.concatonate(
+                    np.exp(-1j*np.pi*chirp_slope*((time[:len(time)//2])**2)),
+                    np.exp(-1j*np.pi*(-chirp_slope)*((time[len(time)//2:])**2))
+                    )
 
         self.chirp_type = chirp_type
         self.chirp_amplitude = chirp_amplitude
