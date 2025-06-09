@@ -1,18 +1,20 @@
 import numpy as np
 import pyqtgraph as pg
+from pyqtgraph.Qt import QtCore, QtWidgets
 from scipy.signal import windows
 from scipy.fft import fft, fftshift, fftfreq
-from numpy.random import normal
-from pyqtgraph.Qt import QtCore, QtWidgets
-import sys
 
-chirp_bandwidth = 30e6 # hz
-chirp_duration = 0.000128 # ms
-sample_rate = 1e6# in hz
-centerFrequency = 2.5e9 # in hz
-num_range_bins = int(chirp_duration * sample_rate)
+
+import sys
+from main import sample_rate, chirp_bandwidth, chirp_duration, centerFrequency
+# chirp_bandwidth = 30e6 # hz
+# chirp_duration = 0.000128 # ms
+# sample_rate = 1e6# in hz
+# centerFrequency = 2.5e9 # in hz
 max_chirps = 255
 chirps_per_refresh = 1
+
+
 c = 3e8
 # update_interval = int(chirps_per_refresh*chirp_duration*1e3)
 update_interval = 1
@@ -20,7 +22,7 @@ update_interval = 1
 def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
 
-def ProcessedMatrix():
+def DoubleFFT():
     
     global data_matrix, sweep_count
     from processingtest import RadarChirpSimulator
@@ -32,7 +34,7 @@ def ProcessedMatrix():
     k = chirp_bandwidth / chirp_duration
     sweep_count = 0
     
-    N_FFT = next_pow2(num_range_bins)
+    N_FFT = next_pow2(rows)
     half_idx = N_FFT // 2
     
     f_axis = fftshift(fftfreq(N_FFT, d=1/sample_rate))
@@ -114,7 +116,7 @@ def ProcessedMatrix():
                                         vel_axis[-1] - vel_axis[0]))
             plot2.setLabel('bottom', 'Range [m]')
             plot2.setLabel('left', 'Velocity [m/s]')
-
+            return norm_fft, doppler_map
     timer = QtCore.QTimer()
     timer.timeout.connect(update)
     timer.start(update_interval)
@@ -122,4 +124,4 @@ def ProcessedMatrix():
     QtWidgets.QApplication.instance().exec()
 
 if __name__ == '__main__':
-    ProcessedMatrix()
+    DoubleFFT()
