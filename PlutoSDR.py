@@ -1,6 +1,7 @@
 import adi
 import numpy as np
 import scipy.fft as fft
+import time
 
 class PlutoSDR:
     def __init__(self, PlutoIP, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=False):
@@ -46,7 +47,10 @@ class PlutoSDR:
         self.rx_iq = None
         self.s_beat = None
         self.f_beat = None
-    
+        self.s_beat_buffer = []
+        self.s_beat_signal_coherent_integration = None
+        self.s_beat_freq_coherent_integration = None
+
     def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
 
@@ -68,8 +72,8 @@ class PlutoSDR:
         self.chirp_time_axis = time
         self.chirp_type = chirp_type
         self.chirp_amplitude = chirp_amplitude
-        self.chirp_bandwidth = chirp_bandwidth
-        self.chirp_duration = chirp_duration
+        self.chirp_bandwidth = chirp_bandwidth # in hz
+        self.chirp_duration = chirp_duration # in ms
 
     def start_transmission(self):
         if self.chirp_type != None:
@@ -99,12 +103,31 @@ class PlutoSDR:
             s_beat = self.receive_data()
             self.stop_transmission()
 
-            # spectrum = fft.fft(s_beat)
-            # magnitude = np.abs(spectrum)
-            # peak_index = np.argmax(magnitude)
-            # self.f_beat = np.abs(frequencies[peak_index])
-
             return s_beat
         else:
             print("Get beat freq not possible since waveform not set")
 
+    def sliding_coherent_integration(self, number_of_pulses_to_add, pulse_buffer_size, pulse_sleep_time_ms):
+        pulses_to_add = []
+        for i in range(number_of_pulses_to_add):
+            time.sleep((pulse_sleep_time_ms*(10**-3))/2)
+            pulses_to_add.append(get_beat_signal())
+            time.sleep((pulse_sleep_time_ms*(10**-3))/2)
+
+        if len(self.s_beat_buffer) >= pulse_buffer_size:
+            self.s_beat_buffer = self.s_beat_buffer[pulse_buffer_size-number_of_pulses_to_add+(len(self.s_beat_buffer)-pulse_buffer_size):]
+        self.s_beat_buffer.extend(pulses_to_add)
+
+        min_len = min(len(s_beat_sig) for s_beat_sig in self.s_beat_buffer)
+
+        s_beat_signal_coherent_integration = np.mean([s_beat_sig[:min_len] for s_beat_sig in self.s_beat_buffer])
+        self.s_beat_signal_coherent_integration = s_beat_signal_coherent_integration
+
+        spectrum = fft.fft(s_beat_signal_coherent_integration)
+        magnitude = np.abs(spectrum)
+        peak_index = np.argmax(magnitude)
+        frequencies = fft.fftfreq(len(s_beat_signal_coherent_integration), d=1/self.sample_rate)
+        s_beat_freq_coherent_integration = np.abs(frequencies[peak_index])
+        self.s_beat_freq_coherent_integration = s_beat_freq_coherent_integration
+
+        return s_beat_signal_coherent_integration, s_beat_freq_coherent_integration
