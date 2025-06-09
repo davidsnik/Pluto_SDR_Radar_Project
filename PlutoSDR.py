@@ -3,28 +3,31 @@ import numpy as np
 import scipy.fft as fft
 
 class PlutoSDR:
-    def __init__(self, PlutoIP, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame):
-        PlutoIP = 'ip:'+PlutoIP
-        my_sdr = adi.Pluto(uri=PlutoIP)
-        my_sdr.sample_rate = int(sample_rate)
-        my_sdr.tx_rf_bandwidth = int(sample_rate)
-        my_sdr.rx_rf_bandwidth = int(sample_rate)
-        my_sdr.rx_lo = int(tx_center_freq)
-        my_sdr.tx_lo = int(rx_center_freq)
-        my_sdr.rx_output_type    
-        my_sdr.rx_enabled_channels = [0]
-        sample_rate = int(my_sdr.sample_rate)
-        my_sdr.gain_control_mode_chan0 = "manual"
-        my_sdr.rx_hardwaregain_chan0 = int(rx_gain)
-        my_sdr._rxadc.set_kernel_buffers_count(1)
+    def __init__(self, PlutoIP, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=False):
+        if not skip_pluto_configuration:
+            PlutoIP = 'ip:'+PlutoIP
+            my_sdr = adi.Pluto(uri=PlutoIP)
+            my_sdr.sample_rate = int(sample_rate)
+            my_sdr.tx_rf_bandwidth = int(sample_rate)
+            my_sdr.rx_rf_bandwidth = int(sample_rate)
+            my_sdr.rx_lo = int(tx_center_freq)
+            my_sdr.tx_lo = int(rx_center_freq)
+            my_sdr.rx_output_type    
+            my_sdr.rx_enabled_channels = [0]
+            sample_rate = int(my_sdr.sample_rate)
+            my_sdr.gain_control_mode_chan0 = "manual"
+            my_sdr.rx_hardwaregain_chan0 = int(rx_gain)
+            my_sdr._rxadc.set_kernel_buffers_count(1)
 
-        my_sdr.tx_enabled_channels = [0]
-        my_sdr.tx_hardwaregain_chan0 = int(tx_gain)
-        
-        frame_length_samples = rx_samples_per_frame
-        
-        N_rx = int(1 * frame_length_samples)
-        my_sdr.rx_buffer_size = N_rx
+            my_sdr.tx_enabled_channels = [0]
+            my_sdr.tx_hardwaregain_chan0 = int(tx_gain)
+            
+            frame_length_samples = rx_samples_per_frame
+            
+            N_rx = int(1 * frame_length_samples)
+            my_sdr.rx_buffer_size = N_rx
+
+            self.pluto_interface = my_sdr
 
         self.Pluto_IP = PlutoIP
         self.sample_rate = sample_rate
@@ -40,8 +43,9 @@ class PlutoSDR:
         self.chirp_bandwidth = None
         self.chirp_duration = None
         self.tx_iq = None
-
-        self.pluto_interface = my_sdr
+        self.rx_iq = None
+        self.s_beat = None
+        self.f_beat = None
     
     def set_waveform(self, chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration):
         sample_period = 1/self.sample_rate
@@ -77,10 +81,10 @@ class PlutoSDR:
 
     def receive_data(self):
         if self.chirp_type != None:
-            rx_iq = self.pluto_interface.rx()
-            N_min = min(len(rx_iq), len(self.tx_iq))
-            s_beat = rx_iq[:N_min] * np.conj(self.tx_iq[:N_min])
-            return s_beat
+            self.rx_iq = self.pluto_interface.rx()
+            N_min = min(len(self.rx_iq), len(self.tx_iq))
+            self.s_beat = self.rx_iq[:N_min] * np.conj(self.tx_iq[:N_min])
+            return self.s_beat
         else:
             print("Receive data not working since waveform config unset")
     def stop_transmission(self):
@@ -88,3 +92,18 @@ class PlutoSDR:
             self.pluto_interface.tx_destroy_buffer()
         else:
             print("Stop transmission not working since waveform config unset")
+
+    def get_beat_freq(self):
+        if self.chirp_type != None:
+            self.start_transmission()
+            s_beat = self.receive_data()
+            self.stop_transmission()
+
+            spectrum = fft.fft(s_beat)
+            magnitude = np.abs(spectrum)
+            peak_index = np.argmax(magnitude)
+            self.f_beat = np.abs(frequencies[peak_index])
+
+            return self.f_beat
+        else:
+            print("Get beat freq not possible since waveform not set")

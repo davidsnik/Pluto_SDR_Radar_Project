@@ -15,17 +15,17 @@ chirp_amplitude = (2**12)
 chirp_bandwidth = 30e6 # hz
 chirp_duration = rx_frame_duration # ms
 
-sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame)
+sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=True)
 sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
-sdr_obj.start_transmission()
-received_data = sdr_obj.receive_data()
+#sdr_obj.start_transmission()
+#received_data = sdr_obj.receive_data()
 
-f, t, Z = stft(received_data, fs = sample_rate, nperseg = 256, return_onesided = True)
-pos_freq = f>=0
-f_pos = f[pos_freq]
-Z_pos = Z[pos_freq]
+f, t, Z = stft(sdr_obj.tx_iq, fs = sample_rate, nperseg = 256, return_onesided = True)
+# pos_freq = f>=0
+# f_pos = f[pos_freq]
+# Z_pos = Z[pos_freq]
 plt.figure(figsize = (10,4))
-plt.pcolormesh(t,f_pos,np.abs(Z_pos)/np.max(np.abs(Z_pos)), shading = 'gouraud')
+plt.pcolormesh(t,f,np.abs(Z)/np.max(np.abs(Z)), shading = 'gouraud')
 plt.tight_layout()
 plt.show()
 
