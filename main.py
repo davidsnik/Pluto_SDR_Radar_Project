@@ -2,48 +2,54 @@ from PlutoSDR import PlutoSDR
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.signal import stft
+
 PlutoIP = '192.168.2.1'
 sample_rate = 60.5e6 # in hz
 centerFrequency = 2.5e9 # in hz
 tx_gain = -20 # in db
 rx_gain = 40 # in db
-rx_frame_duration = 1 # in ms
+rx_frame_duration = 0.000128 # in ms
 rx_samples_per_frame = int((rx_frame_duration*(10**-3))*sample_rate)
 
 chirp_type = "TriangularWave" # Options: "SawtoothWave", "TriangularWave"
 chirp_amplitude = (2**12)
 chirp_bandwidth = 30e6 # hz
 chirp_duration = rx_frame_duration # ms
-
+max_chirps = 255
 sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=True)
 sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
 
+c = 3e8
+
 nperseg = 1024  # Increased from 256
-f, t, Zxx = stft(sdr_obj.tx_iq, fs=sample_rate, nperseg=nperseg, return_onesided=False)
 
-magnitude = np.abs(Zxx)
-magnitude_db = 20 * np.log10(magnitude + 1e-12)
 
-positive_freqs = f >= 0
-f_pos = f[positive_freqs] / 1e6  # Convert to MHz
-Z_pos = magnitude_db[positive_freqs, :]
+if __name__ == '__main__':
+    f, t, Zxx = stft(sdr_obj.tx_iq, fs=sample_rate, nperseg=nperseg, return_onesided=False)
 
-plt.figure(figsize=(10, 4))
-plt.imshow(
-    Z_pos,
-    aspect='auto',
-    origin='lower',
-    extent=[t[0]*1e3, t[-1]*1e3, f_pos[0], f_pos[-1]],  # Time in ms, freq in MHz
-    cmap='viridis',
-    vmin=np.percentile(Z_pos, 10),
-    vmax=np.percentile(Z_pos, 90)
-)
-plt.xlabel('Time [ms]')
-plt.ylabel('Frequency [MHz]')
-plt.colorbar(label='Magnitude [dB]')
-plt.title(f'Spectrogram ({chirp_type}, Bandwidth={chirp_bandwidth/1e6} MHz)')
-plt.tight_layout()
-plt.savefig("spectrogram_corrected.png")
+    magnitude = np.abs(Zxx)
+    magnitude_db = 20 * np.log10(magnitude + 1e-12)
+
+    positive_freqs = f >= 0
+    f_pos = f[positive_freqs] / 1e6  # Convert to MHz
+    Z_pos = magnitude_db[positive_freqs, :]
+    plt.figure(figsize=(10, 4))
+    plt.imshow(
+        Z_pos,
+        aspect='auto',
+        origin='lower',
+        extent=[t[0]*1e3, t[-1]*1e3, f_pos[0], f_pos[-1]],  # Time in ms, freq in MHz
+        cmap='viridis',
+        vmin=np.percentile(Z_pos, 10),
+        vmax=np.percentile(Z_pos, 90)
+    )
+    plt.xlabel('Time [ms]')
+    plt.ylabel('Frequency [MHz]')
+    plt.colorbar(label='Magnitude [dB]')
+    plt.title(f'Spectrogram ({chirp_type}, Bandwidth={chirp_bandwidth/1e6} MHz)')
+    plt.tight_layout()
+    plt.savefig("spectrogram_corrected.png")
+
 
 # %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%
 

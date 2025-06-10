@@ -1,4 +1,4 @@
-import adi
+# import adi
 import numpy as np
 import scipy.fft as fft
 import time

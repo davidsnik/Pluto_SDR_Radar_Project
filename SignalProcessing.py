@@ -7,10 +7,10 @@ from scipy.fft import fft, fftshift, fftfreq
 
 import sys
 from main import sample_rate, chirp_bandwidth, chirp_duration, centerFrequency
-# chirp_bandwidth = 30e6 # hz
-# chirp_duration = 0.000128 # ms
-# sample_rate = 1e6# in hz
-# centerFrequency = 2.5e9 # in hz
+chirp_bandwidth = 30e6 # hz
+chirp_duration = 0.000128 # ms
+sample_rate = 1e6# in hz
+centerFrequency = 2.5e9 # in hz
 max_chirps = 255
 chirps_per_refresh = 1
 
@@ -41,7 +41,6 @@ def DoubleFFT():
     f_axis_pos = f_axis[half_idx:] 
 
     range_axis = (c * f_axis_pos) / (2 * k)
-    
     
     app = QtWidgets.QApplication(sys.argv)
     lut = pg.colormap.get('viridis').getLookupTable(0.0, 1.0, 256)
