@@ -3,9 +3,6 @@ import numpy as np
 import scipy.fft as fft
 import time
 
-from gui import WaveformTypes
-
-
 class PlutoSDR:
     def __init__(self, PlutoIP, sample_rate, tx_center_freq, rx_center_freq, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=False):
         if not skip_pluto_configuration:
@@ -60,12 +57,12 @@ class PlutoSDR:
         time = np.arange(0, chirp_duration + sample_period, sample_period)
 
         match chirp_type:
-            case WaveformTypes.Sawtooth:
+            case "SawtoothWave":
                 chirp_slope = chirp_bandwidth/(chirp_duration*(10**-3))
                 self.tx_iq = chirp_amplitude * np.exp(-1j*np.pi*chirp_slope*(time**2))
-            case WaveformTypes.Triangular:
+            case "TriangularWave":
                 chirp_slope = chirp_bandwidth/((chirp_duration*(10**-3))/2)
-                self.tx_iq = chirp_amplitude * np.concatenate(
+                self.tx_iq = chirp_amplitude * np.concatonate(
                     np.exp(-1j*np.pi*chirp_slope*((time[:len(time)//2])**2)),
                     np.exp(-1j*np.pi*(-chirp_slope)*((time[len(time)//2:])**2))
                     )
@@ -114,7 +111,7 @@ class PlutoSDR:
         pulses_to_add = []
         for i in range(number_of_pulses_to_add):
             time.sleep((pulse_sleep_time_ms*(10**-3))/2)
-            pulses_to_add.append(self.get_beat_signal())
+            pulses_to_add.append(get_beat_signal())
             time.sleep((pulse_sleep_time_ms*(10**-3))/2)
 
         if len(self.s_beat_buffer) >= pulse_buffer_size:
