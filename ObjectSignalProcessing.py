@@ -9,7 +9,7 @@ def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
 
 class DoubleFFT:
-    def __init__(self, chirp_bandwidth: int, chirp_duration: float, center_frequency: int, sample_rate: int, max_chirps: int):
+    def __init__(self, chirp_bandwidth: int, chirp_duration: float, center_frequency: int, sample_rate: int, max_chirps: int, velocity_buffer_size: int):
         self.chirp_bandwidth = chirp_bandwidth
         self.chirp_duration = chirp_duration
         self.center_frequency = center_frequency
@@ -21,10 +21,12 @@ class DoubleFFT:
         self.data_matrix = np.zeros((self.rows, self.cols), dtype = np.complex64)
         self.count = 0
         self.N_FFT = next_pow2(self.rows)
+        self.N_Doppler = next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
         self.range_fft_buffer = None
+        self.velocity_buffer_size = velocity_buffer_size
 
-    def get_matrix(self, data_vector: np.ndarray):
+    def get_range_matrix(self, data_vector: np.ndarray):
         if data_vector.ndim != 1 or data_vector.size != self.rows:
             raise ValueError(f"Expected 1D array of length {int(self.rows)}, got shape {tuple(data_vector.shape)}")
         data_vector = data_vector.reshape(self.rows, 1)
@@ -40,30 +42,30 @@ class DoubleFFT:
 
         Non_normalized_FFT_data = fft.fftshift(fft.fft(self.data_matrix, n=self.N_FFT, axis=0), axes=0)[self.pos_indices:]
         self.range_fft_buffer = Non_normalized_FFT_data
-        Range_matrix = np.abs(Non_normalized_FFT_data) / np.max(np.abs(Non_normalized_FFT_data))
+        range_matrix = np.abs(Non_normalized_FFT_data) / np.max(np.abs(Non_normalized_FFT_data))
         
-        return Range_matrix.T
+        return range_matrix.T
     def get_range_axis(self):
             f_axis = fft.fftshift(fft.fftfreq(self.N_FFT, d=1/sample_rate))
             f_axis_pos = f_axis[self.pos_indices:] 
             range_axis = (c * f_axis_pos) / (2 * self.k)
             return range_axis
-    def get_velocity_matrix(self,N_Doppler):
+    def get_velocity_matrix(self):
         if self.range_fft_buffer is None:
             raise RuntimeError("Call get_matrix() first to compute range FFT.")
 
-        if self.count >= N_Doppler:
+        if self.count >= self.velocity_buffer_size:
             #This ifelse maks sure slow_time_profiles always chooses something between 0 and 255, since FFT_pos has shape (..,255)
-            if self.count<=self.cols:
-                slow_time_profiles = self.range_fft_buffer[:, self.count-N_Doppler : self.count] #Choose last N_doppler chirps to apply FFT on
+            if self.count<=self.velocity_buffer_size:
+                slow_time_profiles = self.range_fft_buffer[:, self.count-self.velocity_buffer_size : self.count] #Choose last N_doppler chirps to apply FFT on
             else:
-                slow_time_profiles = self.range_fft_buffer[:, self.cols-N_Doppler : self.cols]
-        N_FFT_doppler = next_pow2(N_Doppler)
-        doppler_not_normalized = fft.fftshift(fft(slow_time_profiles, axis=1), axes=1)
-        doppler_normalized= np.abs(doppler_not_normalized)/np.max(np.abs(doppler_not_normalized))
-        return doppler_normalized
-    def get_velocity_axis(self,N_Doppler):
-        N_FFT_doppler = next_pow2(N_Doppler)
+                slow_time_profiles = self.range_fft_buffer[:, self.cols-self.velocity_buffer_size : self.cols]
+        doppler_not_normalized = fft.fftshift(fft.fft(slow_time_profiles, n = self.N_Doppler, axis=1), axes=1)
+        velocity_range_matrix= np.abs(doppler_not_normalized)/np.max(np.abs(doppler_not_normalized))
+        return velocity_range_matrix
+    
+    def get_velocity_axis(self):
+        N_FFT_doppler = next_pow2(self.N_Doppler)
         f_axis_dop = np.fft.fftfreq(N_FFT_doppler, d=self.chirp_duration)
         f_axis_dop=np.fft.fftshift(f_axis_dop)
         vel_axis = (c * f_axis_dop) / (2 * self.center_frequency)
@@ -71,16 +73,22 @@ class DoubleFFT:
 
  
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=256)
+test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=8, velocity_buffer_size=4)
 i = 0       
 
 if __name__ == '__main__':
     while i < 10:
         next_chirp = sim.get_next_chirp()
-        real = test.get_matrix(next_chirp)
+        real = test.get_range_matrix(next_chirp)
+        ril = test.get_velocity_matrix()
         axis = test.get_range_axis()
+        dop = test.get_velocity_axis()
         samples = range(256)
-        plt.pcolormesh(axis,samples, real)
-        plt.xlim((0,200))
+        fig, ax = plt.subplot((2,1))
+        ax[0].pcolormesh(axis,samples, real)
+        ax[1].pcolormesh(axis, dop, ril)
+        ax[0].set_xlim((0,200))
+        ax[1].set_xlim((0,200))
+        ax[1].set_ylim((-60,60))
         plt.show()
         i +=1
