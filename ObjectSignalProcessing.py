@@ -57,7 +57,7 @@ class DoubleFFT:
             raise RuntimeError("Call get_matrix() first to compute range FFT.")
         #This ifelse maks sure slow_time_profiles always chooses something between 0 and 255, since FFT_pos has shape (..,255)
         if self.count<=self.cols:
-            start = max(0, self.count - self.velocity_buffer_size)
+            start = max(0, self.count - self.velocity_buffer_size) #is used so we don't select negative array index
             slow_time_profiles = self.range_fft_buffer[:,start : start+ self.velocity_buffer_size] #Choose last N_doppler chirps to apply FFT on
         elif self.count>self.cols:
                 slow_time_profiles = self.range_fft_buffer[:, self.cols-self.velocity_buffer_size : self.cols]
@@ -66,44 +66,34 @@ class DoubleFFT:
 
         doppler_not_normalized = fft.fftshift(fft.fft(slow_time_profiles, n = self.N_Doppler, axis=1), axes=1)
         velocity_range_matrix= np.abs(doppler_not_normalized)/np.max(np.abs(doppler_not_normalized))
-        print(np.shape(slow_time_profiles))
         return velocity_range_matrix.T
-    # def get_velocity_matrix(self):
-    #     if self.range_fft_buffer is None:
-    #         raise RuntimeError("Call get_range_matrix() first to compute range FFT.")
-    #     # how many chirps we can use:
-    #     n = min(self.count, self.velocity_buffer_size)
-    #     # take last n columns (range FFTs)
-    #     slow = self.range_fft_buffer[:, -n:]   # shape: (n_range_bins, n)
-    #     # if fewer than velocity_buffer_size, pad with zeros on the left
-    #     if n < self.velocity_buffer_size:
-    #         pad_cols = self.velocity_buffer_size - n
-    #         slow = np.pad(
-    #             slow,
-    #             ((0,0), (pad_cols,0)),
-    #             mode='constant',
-    #             constant_values=0
-    #         )
-    #     # now slow.shape == (n_range_bins, velocity_buffer_size)
-    #     # Doppler FFT along axis=1
-    #     dop = fft.fftshift(
-    #         fft.fft(slow, n=self.N_Doppler, axis=1),
-    #         axes=1
-    #     )
-    #     dop = np.abs(dop)
-    #     dop /= np.max(dop) if np.max(dop) != 0 else 1
-    #     # dop.shape == (n_range_bins, n_doppler_bins)
-    #     # transpose so rows=Doppler, cols=Range
-    #     return dop
    
     def get_velocity_axis(self):
         N_FFT_doppler = next_pow2(self.N_Doppler)
         f_axis_dop = np.fft.fftfreq(N_FFT_doppler, d=self.chirp_duration)
         f_axis_dop= fft.fftshift(f_axis_dop)
         vel_axis = (c * f_axis_dop) / (2 * self.center_frequency)
-        print(np.shape(vel_axis))
         return vel_axis
 
+    
+    def get_range_doppler(self):
+        """
+        Returns:
+        Organiseert alles wat te maken heeft met velocity estimation. Dan kan in principe alleen deze
+        functie opgeroepen worden.
+          doppler_matrix: shape (n_doppler_bins, n_range_bins)
+          vel_axis:       shape (n_doppler_bins,) [m/s]
+          range_axis:     shape (n_range_bins,) [meters]
+        """
+        # ensure we have enough chirps
+        if self.count < self.velocity_buffer_size:
+            raise RuntimeError(f"Need {self.velocity_buffer_size} chirps for Doppler, have {self.count}")
+
+        doppler_matrix        = self.get_velocity_matrix()
+        vel_axis  = self.get_velocity_axis()
+        range_axis= self.get_range_axis()
+        return doppler_matrix, vel_axis, range_axis
+        
  
 sim = RadarChirpSimulator()
 test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=64, velocity_buffer_size=16)
@@ -142,8 +132,6 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
     fig.colorbar(im1, ax=ax1, label="Normalized amplitude")
 
     # ——— Range–Doppler plot ————————————————————————————————————
-    # vel_matrix is shape (n_range_bins, n_doppler_bins),
-    # but pcolormesh wants C shape = (len(y), len(x)), so we transpose:
     im2 = ax2.pcolormesh(
         range_axis,      # x
         vel_axis,        # y
@@ -165,23 +153,17 @@ i = 0
 ##THIS ONE WORKS
 if __name__ == '__main__':
     while i < 1000:
-        # Always get next chirp and update range matrix!
         s = sim.get_next_chirp()
-        full = test.get_range_matrix(s)
-        #n = min(test.count, test.max_chirps)
-        real = full
-
+        real = test.get_range_matrix(s)
         # Once enough chirps, compute Doppler and plot
+        #Dit is nodig, omdat er minimaal velocity_buffer_size chirps nodig zijn voor velocity estimation.
         if test.count >= test.velocity_buffer_size:
-            ril = test.get_velocity_matrix()
-            axis = test.get_range_axis()
-            dop  = test.get_velocity_axis()
-
+            doppler_matrix,velocity_axis,range_axis=test.get_range_doppler()
             plot_range_doppler(
                 range_matrix=real,
-                vel_matrix =ril,
-                range_axis =axis,
-                vel_axis   =dop,
+                vel_matrix =doppler_matrix,
+                range_axis =range_axis,
+                vel_axis   =velocity_axis,
                 chirp_duration=chirp_duration
             )
 
@@ -189,7 +171,7 @@ if __name__ == '__main__':
 
 
 
-##Dit plakt elke frame achter elkaar.
+##Dit plakt elke frame achter elkaar. Kan crash verorozaken
 # plt.ion()
 # fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,6), constrained_layout=True)
 
