@@ -30,7 +30,7 @@ class DoubleFFT:
         self.count = 0
         self.velocity_buffer_size = velocity_buffer_size
         self.N_FFT = next_pow2(2*self.rows)
-        self.N_Doppler = next_pow2(self.velocity_buffer_size)
+        self.N_Doppler = next_pow2(2*self.velocity_buffer_size)
         #self.N_Doppler= next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
         self.range_fft_buffer = None
