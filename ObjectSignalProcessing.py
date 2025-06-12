@@ -129,7 +129,17 @@ class DoubleFFT:
         return doppler_matrix, vel_axis, range_axis
     
     def CA_CFAR(self, data_matrix: np.ndarray, guard_cells: int, training_cells: int, PFA: float):
-        
+        """CA-CFAR detection algorithm
+
+        Args:
+            data_matrix (np.ndarray): Range-time data matrix of shape (samples_per_chirp, max_chirps)
+            guard_cells (int): Amount of guard cells around the CUT
+            training_cells (int): Amount of cells taken into account for the averaging
+            PFA (float): Probability of false alarm
+
+        Returns:
+            detection_bin (list): Range bins of detected targets (range_axis[detection_bin] gives the detection distance)
+        """
         padding = training_cells + guard_cells
         total_cells = 1 + 2*padding
         edge_padded_signal = np.pad(data_matrix[0,:], (padding, padding), mode = 'edge')
@@ -199,17 +209,17 @@ if __name__ == '__main__':
         CFAR_detections = test.CA_CFAR(range_matrix,30,50,1e-3)
         print(range_axis[CFAR_detections])
         # Once enough chirps, compute Doppler and plot
-        #Dit is nodig, omdat er minimaal velocity_buffer_size chirps nodig zijn voor velocity estimation.
-        # if test.count >= test.velocity_buffer_size:
-        #     doppler_matrix,velocity_axis,range_axis=test.get_range_doppler()
-        #     plot_range_doppler(
-        #         range_matrix=range_matrix,
-        #         vel_matrix =doppler_matrix,
-        #         range_axis =range_axis,
-        #         vel_axis   =velocity_axis,
-        #         chirp_duration=chirp_duration,
-        #         time_axis = time_axis
-        #     )
+        # Dit is nodig, omdat er minimaal velocity_buffer_size chirps nodig zijn voor velocity estimation.
+        if test.count >= test.velocity_buffer_size:
+            doppler_matrix,velocity_axis,range_axis=test.get_range_doppler()
+            plot_range_doppler(
+                range_matrix=range_matrix,
+                vel_matrix =doppler_matrix,
+                range_axis =range_axis,
+                vel_axis   =velocity_axis,
+                chirp_duration=chirp_duration,
+                time_axis = time_axis
+            )
 
         i += 1
 
