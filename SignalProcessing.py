@@ -41,7 +41,6 @@ def DoubleFFT():
 
     range_axis = (c * f_axis_pos) / (2 * k)
     
-    
     app = QtWidgets.QApplication(sys.argv)
     lut = pg.colormap.get('viridis').getLookupTable(0.0, 1.0, 256)
     

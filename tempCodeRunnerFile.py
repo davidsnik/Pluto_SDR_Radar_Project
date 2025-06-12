@@ -1,1 +1,1 @@
-sample_rate = 1e6 
+N_FFT, d=1/sample_rate
