@@ -47,11 +47,23 @@ class DoubleFFT:
         range_matrix = np.abs(Non_normalized_FFT_data) / np.max(np.abs(Non_normalized_FFT_data))
         
         return range_matrix.T
+    
     def get_range_axis(self):
             f_axis = fft.fftshift(fft.fftfreq(self.N_FFT, d=1/sample_rate))
             f_axis_pos = f_axis[self.pos_indices:] 
             range_axis = (c * f_axis_pos) / (2 * self.k)
             return range_axis
+    
+    def get_time_axis(self):
+        if self.count <= self.max_chirps:
+            # Haven't filled buffer yet
+            time_axis = np.arange(self.max_chirps) * self.chirp_duration
+        else:
+            # Buffer is full, show time for the most recent max_chirps
+            start_chirp = self.count - self.max_chirps
+            time_axis = (np.arange(start_chirp, start_chirp + self.max_chirps) * self.chirp_duration)
+        return time_axis
+
     def get_velocity_matrix(self):
         if self.range_fft_buffer is None:
             raise RuntimeError("Call get_matrix() first to compute range FFT.")
@@ -75,6 +87,12 @@ class DoubleFFT:
         vel_axis = (c * f_axis_dop) / (2 * self.center_frequency)
         return vel_axis
 
+    def get_range_time(self, data_vector: np.ndarray):
+        range_matrix = self.get_range_matrix(data_vector)
+        time_axis = self.get_time_axis()
+        range_axis = self.get_range_axis()
+        
+        return range_matrix, time_axis, range_axis
     
     def get_range_doppler(self):
         """
@@ -89,22 +107,12 @@ class DoubleFFT:
         if self.count < self.velocity_buffer_size:
             raise RuntimeError(f"Need {self.velocity_buffer_size} chirps for Doppler, have {self.count}")
 
-        doppler_matrix        = self.get_velocity_matrix()
-        vel_axis  = self.get_velocity_axis()
-        range_axis= self.get_range_axis()
+        doppler_matrix = self.get_velocity_matrix()
+        vel_axis = self.get_velocity_axis()
+        range_axis = self.get_range_axis()
         return doppler_matrix, vel_axis, range_axis
-        
- 
-sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=64, velocity_buffer_size=16)
-i = 0       
 
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-
-def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_duration):
+def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_duration, time_axis):
     """
     range_matrix:   2D np.array, shape (n_chirps,   n_range_bins)
     vel_matrix:     2D np.array, shape (n_range_bins, n_doppler_bins)
@@ -113,8 +121,7 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
     chirp_duration: scalar, seconds per chirp
     """
     # Build time axis for range-time plot
-    n_chirps = range_matrix.shape[0]
-    time_axis = np.arange(n_chirps) * chirp_duration  # seconds
+
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
 
@@ -146,25 +153,26 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
 
     plt.show()
 
-
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=128, velocity_buffer_size=100)
+test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=10, velocity_buffer_size=8)
 i = 0       
+
 ##THIS ONE WORKS
 if __name__ == '__main__':
-    while i < 1000:
+    while i < 16:
         s = sim.get_next_chirp()
-        real = test.get_range_matrix(s)
+        range_matrix, time_axis, range_axis = test.get_range_time(s)
         # Once enough chirps, compute Doppler and plot
         #Dit is nodig, omdat er minimaal velocity_buffer_size chirps nodig zijn voor velocity estimation.
         if test.count >= test.velocity_buffer_size:
             doppler_matrix,velocity_axis,range_axis=test.get_range_doppler()
             plot_range_doppler(
-                range_matrix=real,
+                range_matrix=range_matrix,
                 vel_matrix =doppler_matrix,
                 range_axis =range_axis,
                 vel_axis   =velocity_axis,
-                chirp_duration=chirp_duration
+                chirp_duration=chirp_duration,
+                time_axis = time_axis
             )
 
         i += 1
