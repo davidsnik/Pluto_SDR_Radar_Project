@@ -1,13 +1,19 @@
 import numpy as np
 from numpy.random import normal
-from main import chirp_bandwidth, chirp_duration, sample_rate, centerFrequency, max_chirps
+# from main import chirp_bandwidth, chirp_duration, sample_rate, centerFrequency, max_chirps
 
+chirp_bandwidth = 30e6 # hz
+chirp_duration = 0.000128 # ms
+max_chirps = 255
+centerFrequency = 2.5e9 # in hz
+c = 3e8
+sample_rate = 60.5e6 # in hz
 
 class RadarChirpSimulator:
     def __init__(self, 
                  B=chirp_bandwidth, T=chirp_duration, f0=centerFrequency, fs=sample_rate,
                  R_target=np.array([10, 100]), 
-                 v=np.array([40, -10]), 
+                 v=np.array([400, -10]), 
                  SNR_dB=-16, 
                  N_slow=max_chirps):
         self.B = B

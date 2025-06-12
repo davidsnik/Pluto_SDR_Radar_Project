@@ -62,7 +62,7 @@ class PlutoSDR:
                 self.tx_iq = chirp_amplitude * np.exp(-1j*np.pi*chirp_slope*(time**2))
             case "TriangularWave":
                 chirp_slope = chirp_bandwidth/((chirp_duration*(10**-3))/2)
-                self.tx_iq = chirp_amplitude * np.concatonate(
+                self.tx_iq = chirp_amplitude * np.concatenate(
                     np.exp(-1j*np.pi*chirp_slope*((time[:len(time)//2])**2)),
                     np.exp(-1j*np.pi*(-chirp_slope)*((time[len(time)//2:])**2))
                     )

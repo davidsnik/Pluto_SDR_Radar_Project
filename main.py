@@ -16,8 +16,8 @@ chirp_amplitude = (2**12)
 chirp_bandwidth = 30e6 # hz
 chirp_duration = rx_frame_duration # ms
 max_chirps = 255
-sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=True)
-sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
+# sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=True)
+# sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
 
 c = 3e8
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig("spectrogram_corrected.png")
 
-from gui import App
+from sep.gui import App
 
 PADDING = 10
 
