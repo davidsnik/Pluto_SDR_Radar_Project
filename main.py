@@ -53,9 +53,9 @@ if __name__ == '__main__':
 
 # %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%
 
-# % If you want repeatable alignment between transmit and receive then the
+# % If you want repeatable alignment between transmit and receive then the 
 # % rx_lo, tx_lo and sample_rate can only be set once after power up. If you
-# % want to change the following parameters' values after the first run you
+# % want to change the following parameters' values after the first run you 
 # % must reboot the Pluto (disconnect and reconnect it)
 
 # Pluto_IP = '192.168.2.1';
@@ -73,17 +73,17 @@ if __name__ == '__main__':
 # B = 30e6;       % Chirp bandwidth (Hz)
 # T = 100e-6;       % Chirp duration (s)
 # f0 = 2.5e9;      % Carrier frequency of the RF signal (Hz)
-# fs = PlutoSamprate;     % Sampling rate of all the signals in this simulation (Hz)
+# fs = PlutoSamprate;     % Sampling rate of all the signals in this simulation (Hz) 
 # c = 3e8;        % Speed of light (m/s)
 
 
 # chirp_duration = 1; % Chirp duration (ms)
-# % t = 1/fs:1/fs:chirp_duration*1e-3;
-# t = single(0:1/fs:(chirp_duration*1e-3 ));
+# % t = 1/fs:1/fs:chirp_duration*1e-3;  
+# t = single(0:1/fs:(chirp_duration*1e-3 ));  
 
-# % t = 0:1/fs:(T-1/fs);
+# % t = 0:1/fs:(T-1/fs); 
 # k = B / T;     % Chirp slope defined as ratio of bandwidth over duration
 # sig_A = exp(1j*2*pi*(0.5*k*t.^2));
 
-# tx_waveform = 2^12.*sig_A.';  % # The PlutoSDR expects samples to be between
+# tx_waveform = 2^12.*sig_A.';  % # The PlutoSDR expects samples to be between 
 # %                           -2^14 and +2^14, not -1 and +1 like some SDRs

@@ -6,17 +6,16 @@ from scipy.fft import fft, fftshift, fftfreq
 
 
 import sys
-from main import sample_rate, chirp_bandwidth, chirp_duration, centerFrequency
-chirp_bandwidth = 30e6 # hz
-chirp_duration = 0.000128 # ms
-sample_rate = 1e6# in hz
-centerFrequency = 2.5e9 # in hz
+from main import DEFAULT_SAMPLE_RATE, DEFAULT_CHIRP_BANDWIDTH, DEFAULT_CHIRP_DURATION, DEFAULT_CENTRE_FREQUENCY
+# chirp_bandwidth = 30e6 # hz
+# DEFAULT_CHIRP_DURATION = 0.000128 # ms
+# sample_rate = 1e6# in hz
+# centerFrequency = 2.5e9 # in hz
 max_chirps = 255
 chirps_per_refresh = 1
 
-
 c = 3e8
-# update_interval = int(chirps_per_refresh*chirp_duration*1e3)
+# update_interval = int(chirps_per_refresh*DEFAULT_CHIRP_DURATION*1e3)
 update_interval = 1
 
 def next_pow2(n):
@@ -28,16 +27,16 @@ def DoubleFFT():
     from processingtest import RadarChirpSimulator
     sim = RadarChirpSimulator()
     
-    rows = int(chirp_duration*sample_rate)  # samples per chirp (fast time)
+    rows = int(DEFAULT_CHIRP_DURATION*DEFAULT_SAMPLE_RATE)  # samples per chirp (fast time)
     cols = max_chirps                     # number of chirps (slow time)
     data_matrix = np.zeros((rows, cols), dtype= np.complex64)
-    k = chirp_bandwidth / chirp_duration
+    k = DEFAULT_CHIRP_BANDWIDTH / DEFAULT_CHIRP_DURATION
     sweep_count = 0
     
     N_FFT = next_pow2(rows)
     half_idx = N_FFT // 2
     
-    f_axis = fftshift(fftfreq(N_FFT, d=1/sample_rate))
+    f_axis = fftshift(fftfreq(N_FFT, d=1/DEFAULT_SAMPLE_RATE))
     f_axis_pos = f_axis[half_idx:] 
 
     range_axis = (c * f_axis_pos) / (2 * k)
@@ -71,8 +70,8 @@ def DoubleFFT():
         global data_matrix, sweep_count
         new_sweep = sim.get_next_chirp()
 
-        elapsed_time = sweep_count * chirp_duration
-        window_width = max_chirps * chirp_duration
+        elapsed_time = sweep_count * DEFAULT_CHIRP_DURATION
+        window_width = max_chirps * DEFAULT_CHIRP_DURATION
         start_time = max(0, elapsed_time - window_width)
         
         if sweep_count < max_chirps:
@@ -106,8 +105,8 @@ def DoubleFFT():
             doppler_fft = fftshift(fft(slow_time_profiles,n = N_FFT_doppler ,axis=1), axes=1)
             doppler_map = np.abs(doppler_fft)/np.max(np.abs(doppler_fft))
             
-            f_axis_dop = fftshift(fftfreq(N_FFT_doppler, d=chirp_duration))
-            vel_axis = (c * f_axis_dop) / (2 * centerFrequency)
+            f_axis_dop = fftshift(fftfreq(N_FFT_doppler, d=DEFAULT_CHIRP_DURATION))
+            vel_axis = (c * f_axis_dop) / (2 * DEFAULT_CENTRE_FREQUENCY)
 
             img_doppler.setImage(doppler_map, autoLevels=False)
             img_doppler.setRect(QtCore.QRectF(range_axis[0], vel_axis[0],
