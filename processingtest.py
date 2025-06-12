@@ -13,7 +13,7 @@ class RadarChirpSimulator:
     def __init__(self, 
                  B=chirp_bandwidth, T=chirp_duration, f0=centerFrequency, fs=sample_rate,
                  R_target=np.array([10, 100]), 
-                 v=np.array([400, -10]), 
+                 v=np.array([60, -10]), 
                  SNR_dB=-16, 
                  N_slow=max_chirps):
         self.B = B

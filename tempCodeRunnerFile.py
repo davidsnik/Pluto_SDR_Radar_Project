@@ -1,1 +1,1 @@
-N_FFT, d=1/sample_rate
+10
