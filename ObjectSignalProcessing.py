@@ -1,9 +1,17 @@
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 import scipy.fft as fft
-from main import chirp_bandwidth, chirp_duration, centerFrequency, sample_rate, c
+# from main import chirp_bandwidth, chirp_duration, centerFrequency, sample_rate, c
 import matplotlib.pyplot as plt
 from processingtest import RadarChirpSimulator
-
+from matplotlib.animation import FuncAnimation
+import time
+chirp_bandwidth = 30e6 # hz
+chirp_duration = 0.000128 # ms
+max_chirps = 255
+centerFrequency = 2.5e9 # in hz
+c = 3e8
+sample_rate = 60.5e6 # in hz
 
 def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
@@ -21,7 +29,7 @@ class DoubleFFT:
         self.data_matrix = np.zeros((self.rows, self.cols), dtype = np.complex64)
         self.count = 0
         self.velocity_buffer_size = velocity_buffer_size
-        self.N_FFT = next_pow2(self.rows)
+        self.N_FFT = next_pow2(2*self.rows)
         self.N_Doppler = next_pow2(self.velocity_buffer_size)
         #self.N_Doppler= next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
@@ -121,7 +129,49 @@ class DoubleFFT:
         vel_axis = self.get_velocity_axis()
         range_axis = self.get_range_axis()
         return doppler_matrix, vel_axis, range_axis
+    
+    def CA_CFAR(self, data_matrix: np.ndarray, guard_cells: int, training_cells: int, PFA: float):
+        """CA-CFAR detection algorithm
 
+        Args:
+            data_matrix (np.ndarray): Range-time data matrix of shape (samples_per_chirp, max_chirps)
+            guard_cells (int): Amount of guard cells around the CUT
+            training_cells (int): Amount of cells taken into account for the averaging
+            PFA (float): Probability of false alarm
+
+        Returns:
+            detection_bin (list): Range bins of detected targets (range_axis[detection_bin] gives the detection distance)
+        """
+        padding = training_cells + guard_cells
+        total_cells = 1 + 2*padding
+        if self.count < self.max_chirps:
+            edge_padded_signal = np.pad(data_matrix[self.count-1,:], (padding, padding), mode = 'edge')
+            window = sliding_window_view(edge_padded_signal, total_cells) #args: array to be taken into consideration, window shape
+        
+            mask = np.ones(total_cells, dtype= bool)
+            mask[training_cells:training_cells+2*guard_cells+1] = False
+            
+            avg_noise = np.sum(window[:,mask], axis = 1)/np.sum(mask)
+            
+            alpha = training_cells*(PFA**(-1/training_cells)-1)
+            threshold = alpha * avg_noise
+            
+            detection_bin = data_matrix[self.count-1,:] > threshold
+            return detection_bin
+        else:
+            edge_padded_signal = np.pad(data_matrix[self.max_chirps-1,:], (padding, padding), mode = 'edge')
+            window = sliding_window_view(edge_padded_signal, total_cells) #args: array to be taken into consideration, window shape
+            
+            mask = np.ones(total_cells, dtype= bool)
+            mask[training_cells:training_cells+2*guard_cells+1] = False
+            
+            avg_noise = np.sum(window[:,mask], axis = 1)/np.sum(mask)
+            
+            alpha = training_cells*(PFA**(-1/training_cells)-1)
+            threshold = alpha * avg_noise
+            
+            detection_bin = data_matrix[self.max_chirps-1,:] > threshold
+            return detection_bin
 def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_duration, time_axis):
     """
     range_matrix:   2D np.array, shape (n_chirps,   n_range_bins)
@@ -164,67 +214,31 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
     plt.show()
 
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=10, velocity_buffer_size=8)
+test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=64, velocity_buffer_size=32)
 i = 0       
 
 ##THIS ONE WORKS
 if __name__ == '__main__':
-    while i < 16:
+    # Initialize plots with empty data, but create colorbars only once
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
+
+    def update(frame):
+        global im1, im2
+        
         s = sim.get_next_chirp()
         range_matrix, time_axis, range_axis = test.get_range_time(s)
-        # Once enough chirps, compute Doppler and plot
-        #Dit is nodig, omdat er minimaal velocity_buffer_size chirps nodig zijn voor velocity estimation.
+        CFAR_detections = test.CA_CFAR(range_matrix, 20, 60, 1e-3)
+        print(range_axis[CFAR_detections])
+
         if test.count >= test.velocity_buffer_size:
-            doppler_matrix,velocity_axis,range_axis=test.get_range_doppler()
-            plot_range_doppler(
-                range_matrix=range_matrix,
-                vel_matrix =doppler_matrix,
-                range_axis =range_axis,
-                vel_axis   =velocity_axis,
-                chirp_duration=chirp_duration,
-                time_axis = time_axis
-            )
+            doppler_matrix, velocity_axis, range_axis = test.get_range_doppler()
 
-        i += 1
+            # Remove previous pcolormeshes, but keep colorbars alive
 
+            im1 = ax1.pcolormesh(range_axis, time_axis, range_matrix, shading='auto')
+            ax1.set_xlim(0, 200)
+            im2 = ax2.pcolormesh(range_axis, velocity_axis, doppler_matrix, shading='auto')
+            ax2.set_xlim(0, 200)
 
-
-##Dit plakt elke frame achter elkaar. Kan crash verorozaken
-# plt.ion()
-# fig, (ax1, ax2) = plt.subplots(2,1, figsize=(8,6), constrained_layout=True)
-
-# for i in range(200):
-#     # 1) Always get the next beat-note and update range
-#     beat = sim.get_next_chirp()
-#     full_range = test.get_range_matrix(beat)    # shape = (n_filled, n_range_bins)
-#     n_filled   = min(test.count, test.max_chirps)
-#     range_matrix = full_range[:n_filled, :]
-
-#     # 2) Only do Doppler once the slow-time buffer is full
-#     if test.count >= test.velocity_buffer_size:
-#         vel_matrix = test.get_velocity_matrix()    # shape = (n_doppler_bins, n_range_bins)
-#         r_axis     = test.get_range_axis()         # len = n_range_bins
-#         v_axis     = test.get_velocity_axis()      # len = n_doppler_bins
-
-#         # 3) Clear old plots
-#         ax1.cla()
-#         ax2.cla()
-
-#         # 4) Range–Time
-#         time_axis = np.arange(n_filled) * chirp_duration
-#         ax1.pcolormesh(r_axis, time_axis, range_matrix, shading='auto')
-#         ax1.set_ylabel("Time (s)")
-#         ax1.set_xlabel("Range (m)")
-#         ax1.set_title("Range–Time")
-#         ax1.set_xlim(0,120)
-#         # 5) Range–Doppler
-#         ax2.pcolormesh(r_axis, v_axis, vel_matrix, shading='auto')
-#         ax2.set_ylabel("Velocity (m/s)")
-#         ax2.set_xlabel("Range (m)")
-#         ax2.set_title("Range–Doppler")
-#         ax2.set_xlim(0,120)
-#         # 6) Redraw
-#         plt.pause(0.01)
-
-# # Turn off interactive mode if you like
-# plt.ioff()
+    anim = FuncAnimation(fig, update, interval=10)
+    plt.show()
