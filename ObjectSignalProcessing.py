@@ -142,20 +142,34 @@ class DoubleFFT:
         """
         padding = training_cells + guard_cells
         total_cells = 1 + 2*padding
-        edge_padded_signal = np.pad(data_matrix[0,:], (padding, padding), mode = 'edge')
-        window = sliding_window_view(edge_padded_signal, total_cells) #args: array to be taken into consideration, window shape
+        if self.count < self.max_chirps:
+            edge_padded_signal = np.pad(data_matrix[self.count-1,:], (padding, padding), mode = 'edge')
+            window = sliding_window_view(edge_padded_signal, total_cells) #args: array to be taken into consideration, window shape
         
-        mask = np.ones(total_cells, dtype= bool)
-        mask[training_cells:training_cells+2*guard_cells+1] = False
-        
-        avg_noise = np.sum(window[:,mask], axis = 1)/np.sum(mask)
-        
-        alpha = training_cells*(PFA**(-1/training_cells)-1)
-        threshold = alpha * avg_noise
-        
-        detection_bin = data_matrix[0,:] > threshold
-        return detection_bin
-
+            mask = np.ones(total_cells, dtype= bool)
+            mask[training_cells:training_cells+2*guard_cells+1] = False
+            
+            avg_noise = np.sum(window[:,mask], axis = 1)/np.sum(mask)
+            
+            alpha = training_cells*(PFA**(-1/training_cells)-1)
+            threshold = alpha * avg_noise
+            
+            detection_bin = data_matrix[self.count-1,:] > threshold
+            return detection_bin
+        else:
+            edge_padded_signal = np.pad(data_matrix[self.max_chirps-1,:], (padding, padding), mode = 'edge')
+            window = sliding_window_view(edge_padded_signal, total_cells) #args: array to be taken into consideration, window shape
+            
+            mask = np.ones(total_cells, dtype= bool)
+            mask[training_cells:training_cells+2*guard_cells+1] = False
+            
+            avg_noise = np.sum(window[:,mask], axis = 1)/np.sum(mask)
+            
+            alpha = training_cells*(PFA**(-1/training_cells)-1)
+            threshold = alpha * avg_noise
+            
+            detection_bin = data_matrix[self.max_chirps-1,:] > threshold
+            return detection_bin
 def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_duration, time_axis):
     """
     range_matrix:   2D np.array, shape (n_chirps,   n_range_bins)
@@ -198,15 +212,15 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
     plt.show()
 
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=128, velocity_buffer_size=64)
+test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=10, velocity_buffer_size=8)
 i = 0       
 
 ##THIS ONE WORKS
 if __name__ == '__main__':
-    while i < 256:
+    while i < 16:
         s = sim.get_next_chirp()
         range_matrix, time_axis, range_axis = test.get_range_time(s)
-        CFAR_detections = test.CA_CFAR(range_matrix,30,50,1e-3)
+        CFAR_detections = test.CA_CFAR(range_matrix,20,60,1e-3)
         print(range_axis[CFAR_detections])
         # Once enough chirps, compute Doppler and plot
         # Dit is nodig, omdat er minimaal velocity_buffer_size chirps nodig zijn voor velocity estimation.
