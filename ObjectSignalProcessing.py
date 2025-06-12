@@ -88,6 +88,16 @@ class DoubleFFT:
         return vel_axis
 
     def get_range_time(self, data_vector: np.ndarray):
+        """Gives everything needed for a range-time plot
+
+        Args:
+            data_vector (np.ndarray): Vector containing one chirp of size (samples_per_chirp, 1)
+
+        Returns:
+            range_matrix: Range-time matrix of shape (max_chirps, range_bins)
+            time_axis: Time axis of shape (max_chirps, 1)
+            range_axis: Range axis of shape (range_bins, 1)
+        """
         range_matrix = self.get_range_matrix(data_vector)
         time_axis = self.get_time_axis()
         range_axis = self.get_range_axis()

@@ -50,6 +50,49 @@ if __name__ == '__main__':
     plt.tight_layout()
     plt.savefig("spectrogram_corrected.png")
 
+from gui import App
+
+PADDING = 10
+
+DEFAULT_PLUTO_IP = '192.168.2.1'
+DEFAULT_SAMPLE_RATE = int(60.5e6)  # in hz
+DEFAULT_CENTRE_FREQUENCY = int(2.5e9)  # in hz
+DEFAULT_TX_GAIN = -20  # in db
+DEFAULT_RX_GAIN = 40  # in db
+DEFAULT_RX_FRAME_DURATION = 1  # in ms
+
+DEFAULT_CHIRP_AMPLITUDE = 2 ** 12
+DEFAULT_CHIRP_BANDWIDTH = int(30e6)
+DEFAULT_CHIRP_DURATION = 1  # in ms
+DEFAULT_PULSE_SLEEP_TIME = 1  # in ms
+DEFAULT_NUMBER_OF_COHERENT_PULSES = 10
+
+APP_TITLE = "Radar project"
+
+DEFAULT_VALUES = {"ip": DEFAULT_PLUTO_IP, "sample_rate": DEFAULT_SAMPLE_RATE,
+                  "centre_frequency": DEFAULT_CENTRE_FREQUENCY,
+                  "tx_gain": DEFAULT_TX_GAIN, "rx_gain": DEFAULT_RX_GAIN,
+                  "rx_frame_duration": DEFAULT_RX_FRAME_DURATION,
+                  "amplitude": DEFAULT_CHIRP_AMPLITUDE, "chirp_bandwidth": DEFAULT_CHIRP_BANDWIDTH,
+                  "chirp_duration": DEFAULT_CHIRP_DURATION, "pulse_sleep_time": DEFAULT_PULSE_SLEEP_TIME,
+                  "number_of_coherent_pulses": DEFAULT_NUMBER_OF_COHERENT_PULSES}
+
+app = App(PADDING, APP_TITLE, DEFAULT_VALUES)
+
+# sdr_obj = PlutoSDR(PlutoIP, sample_rate, centerFrequency, centerFrequency, rx_gain, tx_gain, rx_samples_per_frame, skip_pluto_configuration=True)
+# sdr_obj.set_waveform(chirp_type, chirp_amplitude, chirp_bandwidth, chirp_duration)
+#sdr_obj.start_transmission()
+#received_data = sdr_obj.receive_data()
+
+# f, t, Z = stft(sdr_obj.tx_iq, fs = sample_rate, nperseg = 256, return_onesided = True)
+# # pos_freq = f>=0
+# # f_pos = f[pos_freq]
+# # Z_pos = Z[pos_freq]
+# plt.figure(figsize = (10,4))
+# plt.pcolormesh(t,f,np.abs(Z)/np.max(np.abs(Z)), shading = 'gouraud')
+# plt.tight_layout()
+# plt.show()
+
 
 # %%%%%%%%%%%%%%%%%%%% Pluto's parameters configuration %%%%%%%%%%%%%%%%%%%%%
 
