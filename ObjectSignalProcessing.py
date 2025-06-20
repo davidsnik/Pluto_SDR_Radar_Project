@@ -38,7 +38,7 @@ class DoubleFFT:
         self.data_matrix = np.zeros((self.rows, self.cols), dtype = np.complex64)
         self.count = 0
         self.velocity_buffer_size = velocity_buffer_size
-        self.N_FFT = next_pow2(self.rows)
+        self.N_FFT = next_pow2(1*self.rows)
         self.N_Doppler = next_pow2(self.velocity_buffer_size)
         #self.N_Doppler= next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
@@ -205,7 +205,7 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
     ax1.set_title("Range–Time")
     ax1.set_xlabel("Range (m)")
     ax1.set_ylabel("Time (s)")
-    ax1.set_xlim(0,200)
+    ax1.set_xlim(0,10)
     fig.colorbar(im1, ax=ax1, label="Normalized amplitude")
 
     # ——— Range–Doppler plot ————————————————————————————————————
@@ -218,7 +218,7 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
     ax2.set_title("Range–Doppler")
     ax2.set_xlabel("Range (m)")
     ax2.set_ylabel("Velocity (m/s)")
-    ax2.set_xlim(0,200)
+    ax2.set_xlim(0,10)
     fig.colorbar(im2, ax=ax2, label="Normalized amplitude")
 
     plt.show()
@@ -235,7 +235,11 @@ s_beat_vector = (np.squeeze(s_raw) * np.conj(s_tx))
 s_beat_matrix = np.reshape(s_beat_vector, (samples_per_chirp, -1)).T
 sample_rate = raw_data['fs'].squeeze()
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(), chirp_duration= raw_data['chirp_duration'].squeeze(), center_frequency=raw_data['centerFrequency'].squeeze(),sample_rate=sample_rate, max_chirps=128, velocity_buffer_size=64)
+test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(),
+                 chirp_duration= raw_data['chirp_duration'].squeeze(),
+                 center_frequency=raw_data['centerFrequency'].squeeze(),
+                 sample_rate=sample_rate, max_chirps=128,
+                 velocity_buffer_size=64)
      
 
 ##THIS ONE WORKS
@@ -272,7 +276,11 @@ if __name__ == '__main__':
             range_axis[-1] - range_axis[0],
             time_axis[-1] - time_axis[0]
         ))
-
+        detect_bins = test.CA_CFAR(data_matrix = range_matrix,
+                                   guard_cells= 50,
+                                   training_cells= 20,
+                                   PFA = 1e-4)
+        print(f'Targets at {range_axis[detect_bins]}')
         # Update Doppler only if enough chirps collected
         if test.count >= test.velocity_buffer_size:
             doppler_matrix, vel_axis, range_axis_dop = test.get_range_doppler()
@@ -283,6 +291,8 @@ if __name__ == '__main__':
                 vel_axis[-1] - vel_axis[0]
             ))
         i +=1
+        # if i == 10:
+        #     timer.stop()
         
 
     timer = QtCore.QTimer()
