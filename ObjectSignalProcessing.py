@@ -5,13 +5,22 @@ import scipy.fft as fft
 import matplotlib.pyplot as plt
 from processingtest import RadarChirpSimulator
 from matplotlib.animation import FuncAnimation
-import time
-chirp_bandwidth = 30e6 # hz
-chirp_duration = 0.000128 # ms
+import scipy.io
+import pyqtgraph as pg
+from PyQt5 import QtWidgets, QtCore
+
+# chirp_bandwidth = 30e6 # hz
+# chirp_duration = 1 # ms
+# max_chirps = 10
+# centerFrequency = 2.5e9 # in hz
+# c = 3e8
+# sample_rate = 60500000 # in hz
+chirp_bandwidth = 200e6 # hz
+chirp_duration = 1e-4 # ms
 max_chirps = 255
-centerFrequency = 2.5e9 # in hz
+centerFrequency = 2e9 # in hz
 c = 3e8
-sample_rate = 60.5e6 # in hz
+sample_rate = 5e8 # in hz
 
 def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
@@ -24,13 +33,13 @@ class DoubleFFT:
         self.sample_rate = sample_rate
         self.max_chirps = max_chirps
         self.k = self.chirp_bandwidth/self.chirp_duration
-        self.rows = int(chirp_duration*sample_rate)
+        self.rows = int(self.chirp_duration*self.sample_rate)
         self.cols = max_chirps
         self.data_matrix = np.zeros((self.rows, self.cols), dtype = np.complex64)
         self.count = 0
         self.velocity_buffer_size = velocity_buffer_size
-        self.N_FFT = next_pow2(2*self.rows)
-        self.N_Doppler = next_pow2(2*self.velocity_buffer_size)
+        self.N_FFT = next_pow2(100*self.rows)
+        self.N_Doppler = next_pow2(self.velocity_buffer_size)
         #self.N_Doppler= next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
         self.range_fft_buffer = None
@@ -172,6 +181,7 @@ class DoubleFFT:
             
             detection_bin = data_matrix[self.max_chirps-1,:] > threshold
             return detection_bin
+        
 def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_duration, time_axis):
     """
     range_matrix:   2D np.array, shape (n_chirps,   n_range_bins)
@@ -213,32 +223,113 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
 
     plt.show()
 
+raw_data = scipy.io.loadmat(r"C:\Users\L3PyT\OneDrive\Documents\GitHub\Pluto_SDR_Radar_Project\Test Data\Scene3.mat")
+samples_per_chirp = len(raw_data['tx_waveform'])
+
+s_tx = np.array(raw_data['tx_waveform']).T.reshape(-1,)
+s_tx = np.tile(s_tx, int(len(raw_data['received_data'].squeeze().flatten())/samples_per_chirp)).astype(np.complex64)
+s_tx *= raw_data['tx_gain'].squeeze()
+print(raw_data.keys())
+s_raw = raw_data['received_data'].squeeze().astype(np.complex64).T.reshape(-1, 1)
+s_beat_vector = (np.squeeze(s_raw) * np.conj(s_tx))
+s_beat_matrix = np.reshape(s_beat_vector, (samples_per_chirp, -1)).T
+sample_rate = raw_data['fs'].squeeze()
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=chirp_bandwidth, chirp_duration= chirp_duration, center_frequency=centerFrequency,sample_rate=sample_rate, max_chirps=64, velocity_buffer_size=32)
-i = 0       
+test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(), chirp_duration= raw_data['chirp_duration'].squeeze(), center_frequency=raw_data['centerFrequency'].squeeze(),sample_rate=sample_rate, max_chirps=10, velocity_buffer_size=10)
+     
 
 ##THIS ONE WORKS
 if __name__ == '__main__':
-    # Initialize plots with empty data, but create colorbars only once
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
+    i = 0
+    app = QtWidgets.QApplication([])
+    win_range = pg.GraphicsLayoutWidget()
+    win_range.setWindowTitle("Real-Time Range-Time Plot")
+    plot_range = win_range.addPlot(title="Range-Time")
+    img1 = pg.ImageItem()
+    plot_range.addItem(img1)
+    plot_range.setLabel('left', 'Time', units='s')
+    plot_range.setLabel('bottom', 'Range', units='m')
+    plot_range.setRange(xRange=[0,10])
+    
+    win_doppler = pg.GraphicsLayoutWidget()
+    win_doppler.setWindowTitle("Range-Doppler Plot")
+    plot_doppler = win_doppler.addPlot(title = 'Range-Doppler')
+    img2 = pg.ImageItem()
+    plot_doppler.addItem(img2)
+    plot_doppler.setLabel('left', 'Velocity', units = 'm/s')
+    plot_doppler.setLabel('bottom', 'Range', units = 'm')
+    plot_doppler.setRange(xRange=[0,10])
+    
+    def update():
+        global i
+        chirp = s_beat_matrix[i,:]
+        range_matrix, time_axis, range_axis = test.get_range_time(chirp[:-1])
 
-    def update(frame):
-        global im1, im2
-        
-        s = sim.get_next_chirp()
-        range_matrix, time_axis, range_axis = test.get_range_time(s)
-        CFAR_detections = test.CA_CFAR(range_matrix, 20, 60, 1e-3)
-        print(range_axis[CFAR_detections])
+        # Update Range-Time plot
+        img1.setImage(range_matrix.T, autoLevels=(0,1))
+        img1.setRect(pg.QtCore.QRectF(
+            range_axis[0], time_axis[0],
+            range_axis[-1] - range_axis[0],
+            time_axis[-1] - time_axis[0]
+        ))
 
+        # Update Doppler only if enough chirps collected
         if test.count >= test.velocity_buffer_size:
-            doppler_matrix, velocity_axis, range_axis = test.get_range_doppler()
+            doppler_matrix, vel_axis, range_axis_dop = test.get_range_doppler()
+            img2.setImage(doppler_matrix.T, autoLevels=(0,1))
+            img2.setRect(pg.QtCore.QRectF(
+                range_axis_dop[0], vel_axis[0],
+                range_axis_dop[-1] - range_axis_dop[0],
+                vel_axis[-1] - vel_axis[0]
+            ))
+        i +=1
+        
 
-            # Remove previous pcolormeshes, but keep colorbars alive
+    timer = QtCore.QTimer()
+    timer.timeout.connect(update)
+    timer.start(50)  # milliseconds
+    win_range.move(100, 100)
+    win_doppler.move(850, 100)
+    win_range.show()
+    win_doppler.show()
+    app.exec_()
 
-            im1 = ax1.pcolormesh(range_axis, time_axis, range_matrix, shading='auto')
-            ax1.set_xlim(0, 200)
-            im2 = ax2.pcolormesh(range_axis, velocity_axis, doppler_matrix, shading='auto')
-            ax2.set_xlim(0, 200)
+#     # Initialize plots with empty data, but create colorbars only once
+#     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
+#     i = 0
+#     samples_per_chirp = len(raw_data['tx_waveform'])
+#     print(samples_per_chirp)
+#     print(raw_data['received_data'].squeeze().flatten().shape)
+#     s_tx = np.array(raw_data['tx_waveform']).T.reshape(-1,)
+#     s_tx = np.tile(s_tx, int(len(raw_data['received_data'].squeeze().flatten())/samples_per_chirp))
+#     s_tx = s_tx.astype(np.complex64)
+#     tx_gain = (raw_data['tx_gain'].squeeze())
+#     s_tx = tx_gain*s_tx
+#     s_raw_vector = np.array(raw_data['received_data'].squeeze())
+#     s_raw_vector = s_raw_vector.astype(np.complex64)
+#     s_raw_vector = s_raw_vector.T.reshape(-1, 1)
+    
+#     s_beat_vector = (np.squeeze(s_raw_vector)*np.conj(s_tx))
+#     s_beat_matrix = np.reshape(s_beat_vector,(samples_per_chirp,-1)).T
+#     print(s_beat_vector.shape)
+#     def update(frame):
+#         global im1, im2, i
+        
+        
+#         range_matrix, time_axis, range_axis = test.get_range_time((s_beat_matrix[i,:]))
+#         CFAR_detections = test.CA_CFAR(range_matrix, 20, 60, 1e-3)
+#         print(range_axis[CFAR_detections])
 
-    anim = FuncAnimation(fig, update, interval=10)
-    plt.show()
+#         if test.count >= test.velocity_buffer_size:
+#             doppler_matrix, velocity_axis, range_axis = test.get_range_doppler()
+
+#             # Remove previous pcolormeshes, but keep colorbars alive
+
+#             im1 = ax1.pcolormesh(range_axis[:50], time_axis, range_matrix[:,:50], shading='auto')
+#             ax1.set_xlim(0, 50)
+#             im2 = ax2.pcolormesh(range_axis, velocity_axis, doppler_matrix, shading='auto')
+#             ax2.set_xlim(0, 50)
+#             i+=1
+
+#     anim = FuncAnimation(fig, update, interval=10)
+#     plt.show()
