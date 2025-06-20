@@ -38,7 +38,7 @@ class DoubleFFT:
         self.data_matrix = np.zeros((self.rows, self.cols), dtype = np.complex64)
         self.count = 0
         self.velocity_buffer_size = velocity_buffer_size
-        self.N_FFT = next_pow2(100*self.rows)
+        self.N_FFT = next_pow2(self.rows)
         self.N_Doppler = next_pow2(self.velocity_buffer_size)
         #self.N_Doppler= next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
@@ -223,7 +223,7 @@ def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_dur
 
     plt.show()
 
-raw_data = scipy.io.loadmat(r"C:\Users\L3PyT\OneDrive\Documents\GitHub\Pluto_SDR_Radar_Project\Test Data\Scene3.mat")
+raw_data = scipy.io.loadmat(r"C:\Users\L3PyT\OneDrive\Documents\GitHub\Pluto_SDR_Radar_Project\Test Data\Scene1.mat")
 samples_per_chirp = len(raw_data['tx_waveform'])
 
 s_tx = np.array(raw_data['tx_waveform']).T.reshape(-1,)
@@ -235,7 +235,7 @@ s_beat_vector = (np.squeeze(s_raw) * np.conj(s_tx))
 s_beat_matrix = np.reshape(s_beat_vector, (samples_per_chirp, -1)).T
 sample_rate = raw_data['fs'].squeeze()
 sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(), chirp_duration= raw_data['chirp_duration'].squeeze(), center_frequency=raw_data['centerFrequency'].squeeze(),sample_rate=sample_rate, max_chirps=10, velocity_buffer_size=10)
+test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(), chirp_duration= raw_data['chirp_duration'].squeeze(), center_frequency=raw_data['centerFrequency'].squeeze(),sample_rate=sample_rate, max_chirps=128, velocity_buffer_size=64)
      
 
 ##THIS ONE WORKS
@@ -249,7 +249,7 @@ if __name__ == '__main__':
     plot_range.addItem(img1)
     plot_range.setLabel('left', 'Time', units='s')
     plot_range.setLabel('bottom', 'Range', units='m')
-    plot_range.setRange(xRange=[0,10])
+    # plot_range.setRange(xRange=[0,10])
     
     win_doppler = pg.GraphicsLayoutWidget()
     win_doppler.setWindowTitle("Range-Doppler Plot")
@@ -258,12 +258,12 @@ if __name__ == '__main__':
     plot_doppler.addItem(img2)
     plot_doppler.setLabel('left', 'Velocity', units = 'm/s')
     plot_doppler.setLabel('bottom', 'Range', units = 'm')
-    plot_doppler.setRange(xRange=[0,10])
+    # plot_doppler.setRange(xRange=[0,10])
     
     def update():
         global i
         chirp = s_beat_matrix[i,:]
-        range_matrix, time_axis, range_axis = test.get_range_time(chirp[:-1])
+        range_matrix, time_axis, range_axis = test.get_range_time(chirp)
 
         # Update Range-Time plot
         img1.setImage(range_matrix.T, autoLevels=(0,1))
@@ -287,7 +287,7 @@ if __name__ == '__main__':
 
     timer = QtCore.QTimer()
     timer.timeout.connect(update)
-    timer.start(50)  # milliseconds
+    timer.start(5)  # milliseconds
     win_range.move(100, 100)
     win_doppler.move(850, 100)
     win_range.show()
