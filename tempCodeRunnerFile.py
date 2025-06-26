@@ -1,2 +1,1 @@
-        # if i == 10:
-        #     timer.stop()
+self.plot_doppler.setRange(xRange=[0, 800])

@@ -8,7 +8,7 @@ from matplotlib.animation import FuncAnimation
 import scipy.io
 import pyqtgraph as pg
 from PyQt5 import QtWidgets, QtCore
-
+import pyqtgraph.exporters
 # chirp_bandwidth = 30e6 # hz
 # chirp_duration = 1 # ms
 # max_chirps = 10
@@ -21,6 +21,10 @@ max_chirps = 255
 centerFrequency = 2e9 # in hz
 c = 3e8
 sample_rate = 5e8 # in hz
+
+training_cells = 12
+guard_cells = 10
+PFA = 1e-4
 
 def next_pow2(n):
     return 1 if n == 0 else 2**int(np.ceil(np.log2(n)))
@@ -38,7 +42,7 @@ class DoubleFFT:
         self.data_matrix = np.zeros((self.rows, self.cols), dtype = np.complex64)
         self.count = 0
         self.velocity_buffer_size = velocity_buffer_size
-        self.N_FFT = next_pow2(1*self.rows)
+        self.N_FFT = next_pow2(self.rows)
         self.N_Doppler = next_pow2(self.velocity_buffer_size)
         #self.N_Doppler= next_pow2(self.cols)
         self.pos_indices = self.N_FFT//2
@@ -66,10 +70,12 @@ class DoubleFFT:
         return range_matrix.T
     
     def get_range_axis(self):
-            f_axis = fft.fftshift(fft.fftfreq(self.N_FFT, d=1/sample_rate))
-            f_axis_pos = f_axis[self.pos_indices:] 
-            range_axis = (c * f_axis_pos) / (2 * self.k)
-            return range_axis
+        f_axis = fft.fftshift(np.fft.fftfreq(self.N_FFT, d=1/self.sample_rate))
+        f_axis = f_axis[self.pos_indices:]  # take only positive bins after shift
+        range_axis = (c * f_axis) / (2 * self.k)
+        return range_axis
+
+
     
     def get_time_axis(self):
         if self.count <= self.max_chirps:
@@ -182,164 +188,224 @@ class DoubleFFT:
             detection_bin = data_matrix[self.max_chirps-1,:] > threshold
             return detection_bin
         
-def plot_range_doppler(range_matrix, vel_matrix, range_axis, vel_axis, chirp_duration, time_axis):
-    """
-    range_matrix:   2D np.array, shape (n_chirps,   n_range_bins)
-    vel_matrix:     2D np.array, shape (n_range_bins, n_doppler_bins)
-    range_axis:     1D np.array, length = n_range_bins (meters)
-    vel_axis:       1D np.array, length = n_doppler_bins (m/s)
-    chirp_duration: scalar, seconds per chirp
-    """
-    # Build time axis for range-time plot
+import sys
+import numpy as np
+import scipy.fft as fft
+from numpy.lib.stride_tricks import sliding_window_view
+import pyqtgraph as pg
+from PyQt5 import QtWidgets, QtCore
+
+# (Your existing DoubleFFT and other functions remain unchanged)
+# I assume DoubleFFT, RadarChirpSimulator, etc. are already defined
+
+class MainWindow(QtWidgets.QMainWindow):
+    def __init__(self, double_fft_instance, sim_instance, s_beat_matrix, range_axis, vel_axis, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setWindowTitle("Radar Visualization Main Window")
+        self.resize(1600, 600)
+
+        self.test = double_fft_instance
+        self.sim = sim_instance
+        self.s_beat_matrix = s_beat_matrix
+
+        # Central widget and layout
+        central_widget = QtWidgets.QWidget()
+        self.setCentralWidget(central_widget)
+
+        layout = QtWidgets.QHBoxLayout()
+        central_widget.setLayout(layout)
+
+        # Setup plots as GraphicsLayoutWidgets (containers)
+        self.win_range = pg.GraphicsLayoutWidget()
+        self.win_range.setWindowTitle("Real-Time Range-Time Plot")
+        self.win_range.setBackground('w')
+        layout.addWidget(self.win_range)
+
+        self.win_doppler = pg.GraphicsLayoutWidget()
+        self.win_doppler.setWindowTitle("Range-Doppler Plot")
+        self.win_doppler.setBackground('w')
+        layout.addWidget(self.win_doppler)
+
+        self.win_freq = pg.GraphicsLayoutWidget()
+        self.win_freq.setWindowTitle("Frequency Response & CFAR Threshold")
+        self.win_freq.setBackground('w')
+        layout.addWidget(self.win_freq)
+
+        # Setup Range-Time plot inside win_range
+        self.plot_range = self.win_range.addPlot(title="Range-Time")
 
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
+        black_pen = pg.mkPen('k')
+        self.plot_range.getAxis('bottom').setPen(black_pen)
+        self.plot_range.getAxis('bottom').setTextPen(black_pen)
+        self.plot_range.getAxis('left').setPen(black_pen)
+        self.plot_range.getAxis('left').setTextPen(black_pen)
 
-    # ——— Range-Time plot ——————————————————————————————————————
-    im1 = ax1.pcolormesh(
-        range_axis,      # x
-        time_axis,       # y
-        range_matrix,    # C (shape = [len(y), len(x)])
-        shading='auto'
-    )
-    ax1.set_title("Range–Time")
-    ax1.set_xlabel("Range (m)")
-    ax1.set_ylabel("Time (s)")
-    ax1.set_xlim(0,10)
-    fig.colorbar(im1, ax=ax1, label="Normalized amplitude")
+        self.plot_range.setTitle("Range-Time", color='k')
+        self.img1 = pg.ImageItem()
+        
+        cmap = pg.colormap.get('viridis')
+        lut = cmap.getLookupTable(0.0, 1.0, 256)
+        self.img1.setLookupTable(lut)
+        self.plot_range.addItem(self.img1)
+        self.plot_range.setLabel('left', 'Time', units='s', color = 'k')
+        self.plot_range.setLabel('bottom', 'Range', units='m', color = 'k')
+        self.plot_range.setRange(xRange=[0, 800])
 
-    # ——— Range–Doppler plot ————————————————————————————————————
-    im2 = ax2.pcolormesh(
-        range_axis,      # x
-        vel_axis,        # y
-        vel_matrix,    # C (shape = [len(y), len(x)])
-        shading='auto'
-    )
-    ax2.set_title("Range–Doppler")
-    ax2.set_xlabel("Range (m)")
-    ax2.set_ylabel("Velocity (m/s)")
-    ax2.set_xlim(0,10)
-    fig.colorbar(im2, ax=ax2, label="Normalized amplitude")
+        # Setup Doppler plot inside win_doppler
+        self.plot_doppler = self.win_doppler.addPlot(title='Range-Doppler', color = 'k')
+        self.img2 = pg.ImageItem()
+        self.img2.setLookupTable(lut)
+        self.plot_doppler.addItem(self.img2)
+        self.plot_doppler.setLabel('left', 'Velocity', units='m/s')
+        self.plot_doppler.setLabel('bottom', 'Range', units='m')
+        self.plot_doppler.setRange(xRange=[0, 800])
 
-    plt.show()
 
-raw_data = scipy.io.loadmat(r"C:\Users\L3PyT\OneDrive\Documents\GitHub\Pluto_SDR_Radar_Project\Test Data\Scene1.mat")
-samples_per_chirp = len(raw_data['tx_waveform'])
+        self.plot_doppler.getAxis('bottom').setPen(black_pen)
+        self.plot_doppler.getAxis('bottom').setTextPen(black_pen)
+        self.plot_doppler.getAxis('left').setPen(black_pen)
+        self.plot_doppler.getAxis('left').setTextPen(black_pen)
+        self.plot_doppler.setTitle("Range-Doppler", color='k')
+        
+        # Setup Frequency + CFAR plot inside win_freq
+        self.plot_freq = self.win_freq.addPlot(title="Chirp FFT and CFAR Threshold", color = 'k')
+        self.curve_fft = self.plot_freq.plot(pen='b', name="FFT Magnitude", color = 'k')
+        self.curve_thresh = self.plot_freq.plot(pen='r', name="CFAR Threshold", color = 'k')
+        self.plot_freq.setLabel('left', 'Amplitude', color = 'k')
+        self.plot_freq.setLabel('bottom', 'Range', units='m', color = 'k')
+        self.plot_freq.setLogMode(False, True)
+        self.plot_freq.setRange(xRange=[0, 800])
 
-s_tx = np.array(raw_data['tx_waveform']).T.reshape(-1,)
-s_tx = np.tile(s_tx, int(len(raw_data['received_data'].squeeze().flatten())/samples_per_chirp)).astype(np.complex64)
-s_tx *= raw_data['tx_gain'].squeeze()
-print(raw_data.keys())
-s_raw = raw_data['received_data'].squeeze().astype(np.complex64).T.reshape(-1, 1)
-s_beat_vector = (np.squeeze(s_raw) * np.conj(s_tx))
-s_beat_matrix = np.reshape(s_beat_vector, (samples_per_chirp, -1)).T
-sample_rate = raw_data['fs'].squeeze()
-sim = RadarChirpSimulator()
-test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(),
-                 chirp_duration= raw_data['chirp_duration'].squeeze(),
-                 center_frequency=raw_data['centerFrequency'].squeeze(),
-                 sample_rate=sample_rate, max_chirps=128,
-                 velocity_buffer_size=64)
-     
 
-##THIS ONE WORKS
-if __name__ == '__main__':
-    i = 0
-    app = QtWidgets.QApplication([])
-    win_range = pg.GraphicsLayoutWidget()
-    win_range.setWindowTitle("Real-Time Range-Time Plot")
-    plot_range = win_range.addPlot(title="Range-Time")
-    img1 = pg.ImageItem()
-    plot_range.addItem(img1)
-    plot_range.setLabel('left', 'Time', units='s')
-    plot_range.setLabel('bottom', 'Range', units='m')
-    # plot_range.setRange(xRange=[0,10])
-    
-    win_doppler = pg.GraphicsLayoutWidget()
-    win_doppler.setWindowTitle("Range-Doppler Plot")
-    plot_doppler = win_doppler.addPlot(title = 'Range-Doppler')
-    img2 = pg.ImageItem()
-    plot_doppler.addItem(img2)
-    plot_doppler.setLabel('left', 'Velocity', units = 'm/s')
-    plot_doppler.setLabel('bottom', 'Range', units = 'm')
-    # plot_doppler.setRange(xRange=[0,10])
-    
-    def update():
-        global i
-        chirp = s_beat_matrix[i,:]
-        range_matrix, time_axis, range_axis = test.get_range_time(chirp)
+        self.plot_freq.getAxis('bottom').setPen(black_pen)
+        self.plot_freq.getAxis('bottom').setTextPen(black_pen)
+        self.plot_freq.getAxis('left').setPen(black_pen)
+        self.plot_freq.getAxis('left').setTextPen(black_pen)
+        self.plot_freq.setTitle("Chirp FFT and CFAR Threshold", color='k')
+        # Initialize variables
+        self.i = 0
+        self.paused = False
+
+        # Timer for updates
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.update)
+        self.timer.start(30)  # milliseconds
+
+    def toggle_pause(self):
+        self.paused = not self.paused
+        print("Paused" if self.paused else "Resumed")
+
+    def save_screenshots(self):
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        exporter1 = pg.exporters.ImageExporter(self.plot_range)
+        exporter1.export(f"range_time_{timestamp}.png")
+
+        exporter2 = pg.exporters.ImageExporter(self.plot_doppler)
+        exporter2.export(f"range_doppler_{timestamp}.png")
+
+        exporter3 = pg.exporters.ImageExporter(self.plot_freq)
+        exporter3.export(f"fft_threshold_{timestamp}.png")
+
+        print(f"Screenshots saved with timestamp {timestamp}")
+    def keyPressEvent(self, event):
+        if event.key() == QtCore.Qt.Key_S:
+            print("S key pressed — saving screenshots.")
+            self.save_screenshots()
+    def update(self):
+        if self.paused:
+            return
+
+        if self.i >= self.s_beat_matrix.shape[0]:
+                print("Reached end of data — stopping updates.")
+                self.timer.stop()
+                return
+
+        chirp = self.s_beat_matrix[self.i, :]
+        # chirp = self.sim.get_next_chirp()
+
+        range_matrix, time_axis, range_axis = self.test.get_range_time(chirp[:-1])
 
         # Update Range-Time plot
-        img1.setImage(range_matrix.T, autoLevels=(0,1))
-        img1.setRect(pg.QtCore.QRectF(
+        self.img1.setImage(range_matrix.T, autoLevels=(0, 1))
+        self.img1.setRect(pg.QtCore.QRectF(
             range_axis[0], time_axis[0],
             range_axis[-1] - range_axis[0],
             time_axis[-1] - time_axis[0]
         ))
-        detect_bins = test.CA_CFAR(data_matrix = range_matrix,
-                                   guard_cells= 50,
-                                   training_cells= 20,
-                                   PFA = 1e-4)
+
+        detect_bins = self.test.CA_CFAR(data_matrix=range_matrix,
+                                        guard_cells=10,
+                                        training_cells=12,
+                                        PFA=1e-4)
         print(f'Targets at {range_axis[detect_bins]}')
+
         # Update Doppler only if enough chirps collected
-        if test.count >= test.velocity_buffer_size:
-            doppler_matrix, vel_axis, range_axis_dop = test.get_range_doppler()
-            img2.setImage(doppler_matrix.T, autoLevels=(0,1))
-            img2.setRect(pg.QtCore.QRectF(
+        if self.test.count >= self.test.velocity_buffer_size:
+            doppler_matrix, vel_axis, range_axis_dop = self.test.get_range_doppler()
+            self.img2.setImage(doppler_matrix.T, autoLevels=(0, 1))
+            self.img2.setRect(pg.QtCore.QRectF(
                 range_axis_dop[0], vel_axis[0],
                 range_axis_dop[-1] - range_axis_dop[0],
                 vel_axis[-1] - vel_axis[0]
             ))
-        i +=1
-        # if i == 10:
-        #     timer.stop()
-        
 
-    timer = QtCore.QTimer()
-    timer.timeout.connect(update)
-    timer.start(5)  # milliseconds
-    win_range.move(100, 100)
-    win_doppler.move(850, 100)
-    win_range.show()
-    win_doppler.show()
+        self.i += 1
+
+        # Frequency response + CFAR Threshold for current chirp
+        padding = 10 + 12
+        total_cells = 1 + 2 * padding
+
+        current_fft = np.abs(fft.fftshift(fft.fft(chirp, n=self.test.N_FFT)))[self.test.pos_indices:]
+        current_fft /= np.max(current_fft)
+        range_axis_fft = self.test.get_range_axis()
+
+        edge_padded = np.pad(current_fft, (padding, padding), mode='edge')
+        window = sliding_window_view(edge_padded, total_cells)
+
+        mask = np.ones(total_cells, dtype=bool)
+        mask[12:12 + 2*10 + 1] = False
+
+        avg_noise = np.sum(window[:, mask], axis=1) / np.sum(mask)
+        alpha = 12 * (1e-4 ** (-1 / 12) - 1)
+        threshold = alpha * avg_noise
+
+        self.curve_fft.setData(range_axis_fft, current_fft)
+        self.curve_thresh.setData(range_axis_fft, threshold)
+            
+
+
+if __name__ == '__main__':
+    import scipy.io
+    raw_data = scipy.io.loadmat(r"C:\Users\L3PyT\OneDrive\Documents\GitHub\Pluto_SDR_Radar_Project\Test Data\Scene4.mat")
+    samples_per_chirp = len(raw_data['tx_waveform'])
+
+    s_tx = np.array(raw_data['tx_waveform']).T.reshape(-1,)
+    s_tx = np.tile(s_tx, int(len(raw_data['received_data'].squeeze().flatten())/samples_per_chirp)).astype(np.complex64)
+    s_tx *= raw_data['tx_gain'].squeeze()
+    s_raw = raw_data['received_data'].squeeze().astype(np.complex64).T.reshape(-1, 1)
+    s_beat_vector = (np.squeeze(s_raw) * np.conj(s_tx))
+    s_beat_matrix = np.reshape(s_raw, (samples_per_chirp, -1)).T
+
+    sim = RadarChirpSimulator()
+    chirp_bandwidth = 200e6
+    chirp_duration = 1e-4
+    centerFrequency = 2e9
+    sample_rate = 5e8
+    sample_rate = raw_data['fs'].squeeze()
+    # test = DoubleFFT(chirp_bandwidth=chirp_bandwidth,
+    #                  chirp_duration=chirp_duration,
+    #                  center_frequency=centerFrequency,
+    #                  sample_rate=sample_rate, max_chirps=256,
+    #                  velocity_buffer_size=128)
+    test = DoubleFFT(chirp_bandwidth=raw_data['fstop'].squeeze()-raw_data['fstart'].squeeze(),
+                    chirp_duration= raw_data['chirp_duration'].squeeze(),
+                    center_frequency=raw_data['centerFrequency'].squeeze(),
+                    sample_rate=sample_rate, max_chirps=10,
+                    velocity_buffer_size=10)
+
+    app = QtWidgets.QApplication([])
+    main_window = MainWindow(test, sim, s_beat_matrix, None, None)
+    main_window.show()
     app.exec_()
-
-#     # Initialize plots with empty data, but create colorbars only once
-#     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), constrained_layout=True)
-#     i = 0
-#     samples_per_chirp = len(raw_data['tx_waveform'])
-#     print(samples_per_chirp)
-#     print(raw_data['received_data'].squeeze().flatten().shape)
-#     s_tx = np.array(raw_data['tx_waveform']).T.reshape(-1,)
-#     s_tx = np.tile(s_tx, int(len(raw_data['received_data'].squeeze().flatten())/samples_per_chirp))
-#     s_tx = s_tx.astype(np.complex64)
-#     tx_gain = (raw_data['tx_gain'].squeeze())
-#     s_tx = tx_gain*s_tx
-#     s_raw_vector = np.array(raw_data['received_data'].squeeze())
-#     s_raw_vector = s_raw_vector.astype(np.complex64)
-#     s_raw_vector = s_raw_vector.T.reshape(-1, 1)
-    
-#     s_beat_vector = (np.squeeze(s_raw_vector)*np.conj(s_tx))
-#     s_beat_matrix = np.reshape(s_beat_vector,(samples_per_chirp,-1)).T
-#     print(s_beat_vector.shape)
-#     def update(frame):
-#         global im1, im2, i
-        
-        
-#         range_matrix, time_axis, range_axis = test.get_range_time((s_beat_matrix[i,:]))
-#         CFAR_detections = test.CA_CFAR(range_matrix, 20, 60, 1e-3)
-#         print(range_axis[CFAR_detections])
-
-#         if test.count >= test.velocity_buffer_size:
-#             doppler_matrix, velocity_axis, range_axis = test.get_range_doppler()
-
-#             # Remove previous pcolormeshes, but keep colorbars alive
-
-#             im1 = ax1.pcolormesh(range_axis[:50], time_axis, range_matrix[:,:50], shading='auto')
-#             ax1.set_xlim(0, 50)
-#             im2 = ax2.pcolormesh(range_axis, velocity_axis, doppler_matrix, shading='auto')
-#             ax2.set_xlim(0, 50)
-#             i+=1
-
-#     anim = FuncAnimation(fig, update, interval=10)
-#     plt.show()
